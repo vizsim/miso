@@ -1,0 +1,1226 @@
+/* ============================================
+   RESET & BASE STYLES
+   ============================================ */
+
+html, body { 
+  height: 100%; 
+  margin: 0; 
+}
+
+#map { 
+  height: 100%; 
+}
+
+/* Leaflet Zoom Controls Position (unten links) */
+.leaflet-bottom.leaflet-left {
+  bottom: 10px;
+  left: 10px;
+}
+
+/* Einwohner-Layer: Hover-Tooltip */
+.population-tooltip {
+  font-size: 13px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.population-tooltip::before {
+  border-bottom-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Einwohner-Layer: Legende / Colormap (nur sichtbar wenn Layer aktiv) */
+.population-legend {
+  display: none;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
+.population-legend-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.population-legend-segment {
+  flex: 1;
+  min-width: 0;
+}
+.population-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #666;
+}
+.population-legend-tick {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+/* ============================================
+   LAYOUT - PANEL
+   ============================================ */
+
+.panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: white;
+  padding: 0;
+  z-index: 1000;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  font: 14px/1.3 system-ui;
+  min-width: 270px;
+  max-width: 320px;
+  max-height: calc(100vh - 35px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.panel-header {
+  padding: 15px 20px 15px 15px;
+  border-bottom: 1px solid #eee;
+  position: relative;
+}
+
+.panel-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Panel Collapse Button */
+.btn-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-close:hover {
+  color: #333;
+}
+
+.btn-close:focus-visible {
+  outline: 2px solid #0066ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.btn-close svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+
+/* Basis-Pfeil-Logik */
+.toggle-arrow {
+  display: inline-block;
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+
+.panel.collapsed .toggle-arrow {
+  transform: rotate(90deg);
+}
+
+/* Panel Collapsed State */
+.panel.collapsed .panel-section {
+  display: none;
+}
+
+.panel.collapsed {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Hinweis wenn noch kein Ziel gesetzt (Workflow) – verschwindet, sobald ein Ziel gesetzt ist */
+.panel-hint {
+  margin-top: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+  border-radius: 8px;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+.panel-hint--no-target {
+  background: #e8eeff;
+  border: 2px solid #0066ff;
+  box-shadow: 0 2px 8px rgba(0, 102, 255, 0.12);
+}
+.panel-hint-main {
+  margin: 0 0 10px 0;
+  font-weight: 500;
+}
+.panel-hint-main:last-child {
+  margin-bottom: 0;
+}
+.panel-hint-main strong {
+  color: #0047ab;
+}
+.panel-hint-secondary {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 102, 255, 0.25);
+  font-size: 12px;
+  color: #555;
+  line-height: 1.45;
+}
+.panel-hint.is-hidden {
+  display: none;
+}
+
+.panel-section {
+  padding: 15px 20px 15px 15px;
+}
+
+/* Konfiguration in Blöcke gegliedert */
+.config-block {
+  margin-top: 16px;
+  padding: 12px 0;
+  border-top: 1px solid #eee;
+}
+.config-block:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.config-block-title {
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+/* Inhalt unter Blocktitel optisch eingerückt */
+.config-block > .config-group,
+.config-block > .config-group-inline,
+.config-block > .legend {
+  padding-left: 14px;
+  border-left: 2px solid #e8ecf2;
+  margin-left: 0;
+}
+.config-block > .config-group:first-of-type,
+.config-block > .config-group-inline:first-of-type {
+  margin-top: 0;
+}
+
+.config-group-export {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.config-separator {
+  height: 1px;
+  background: #eee;
+  margin: 12px 15px;
+}
+
+/* GitHub Links */
+.github-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.status-badge {
+  height: 20px;
+  display: block;
+}
+
+.github-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #666;
+  text-decoration: none;
+  font-size: 12px;
+  transition: color 0.2s ease;
+  padding: 4px;
+}
+
+.github-link:hover {
+  color: #333;
+}
+
+.github-link svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.panel-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================
+   CONFIG GROUPS & FORM ELEMENTS
+   ============================================ */
+
+.config-group {
+  margin-bottom: 12px;
+}
+
+.config-group:last-child {
+  margin-bottom: 0;
+}
+
+.config-group-with-border {
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+  margin-top: 12px;
+}
+
+/* Zeile mit Label + Info-Icon (z. B. Quellenangabe Einwohner) */
+.config-group-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.config-group-label-row .config-group-label {
+  margin-bottom: 0;
+  font-weight: 500;
+  font-size: 13px;
+  color: #555;
+}
+.info-hint {
+  position: relative;
+  display: inline-flex;
+  cursor: help;
+  color: #888;
+  flex-shrink: 0;
+}
+.info-hint-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.info-hint:hover {
+  color: #555;
+}
+.info-hint-text {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: max(260px, min(320px, 90vw));
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.4;
+  color: #333;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s;
+  z-index: 2000;
+  pointer-events: none;
+}
+.info-hint:hover .info-hint-text {
+  opacity: 1;
+  visibility: visible;
+}
+
+.config-group label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+  font-size: 12px;
+  color: #555;
+}
+
+.config-group input,
+.config-group select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.config-group input:focus,
+.config-group select:focus {
+  outline: none;
+  border-color: #0066ff;
+  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1);
+}
+
+/* Inline config group für nebeneinander liegende Felder */
+.config-group-inline {
+  display: flex;
+  gap: 12px;
+}
+
+.config-field-half {
+  flex: 1;
+  min-width: 0; /* Verhindert Overflow */
+}
+
+.config-field-half input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ============================================
+   BUTTONS - PROFILE
+   ============================================ */
+
+.profile-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.profile-btn:hover {
+  border-color: #0066ff;
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.profile-btn:focus-visible {
+  outline: 2px solid #0066ff;
+  outline-offset: 2px;
+}
+
+.profile-btn.active {
+  border-color: #0066ff;
+  background: #0066ff;
+  color: white;
+}
+
+.profile-btn svg {
+  display: block;
+}
+
+/* ============================================
+   BUTTONS - DISTRIBUTION
+   ============================================ */
+
+.distribution-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.dist-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+}
+
+.dist-btn:hover {
+  border-color: #0066ff;
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.dist-btn:focus-visible {
+  outline: 2px solid #0066ff;
+  outline-offset: 2px;
+}
+
+.dist-btn.active {
+  border-color: #0066ff;
+  background: #0066ff;
+  color: white;
+}
+
+.dist-btn svg {
+  display: block;
+}
+
+/* ============================================
+   HISTOGRAM
+   ============================================ */
+
+.histogram-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.histogram-mode-label {
+  font-size: 13px;
+  color: #444;
+  flex-shrink: 0;
+}
+
+.histogram-mode-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.histogram-mode-btn {
+  flex: 1;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+}
+
+.histogram-mode-btn:hover {
+  border-color: #0066ff;
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.histogram-mode-btn:focus-visible {
+  outline: 2px solid #0066ff;
+  outline-offset: 2px;
+}
+
+.histogram-mode-btn.active {
+  border-color: #0066ff;
+  background: #0066ff;
+  color: white;
+}
+
+.histogram-mode-btn[data-mode="route"].active {
+  border-color: #0a7d3a;
+  background: #0a7d3a;
+}
+
+#distance-histogram {
+  width: 100%;
+  height: 120px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f9f9f9;
+}
+
+/* ============================================
+   SWITCHES / TOGGLES
+   ============================================ */
+
+.switch-toggle {
+  position: relative;
+  margin-bottom: 0;
+}
+
+.switch-toggle label {
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.switch-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  background-color: #ccc;
+  border-radius: 20px;
+  transition: background-color 0.3s;
+  flex-shrink: 0;
+}
+
+.switch-slider::before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.switch-toggle input[type="checkbox"]:checked + .switch-slider {
+  background-color: #0066ff;
+}
+
+.switch-toggle input[type="checkbox"]:checked + .switch-slider::before {
+  transform: translateX(20px);
+}
+
+.switch-toggle input[type="checkbox"]:focus-visible + .switch-slider {
+  box-shadow: 0 0 0 2px #0066ff;
+}
+
+.switch-toggle label .switch-icon {
+  display: block;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.switch-text {
+  font-size: 14px;
+  color: #333;
+  user-select: none;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Kleinerer Switch für "Startpunkte ausblenden" */
+.switch-toggle-small .switch-slider {
+  width: 32px;
+  height: 16px;
+}
+
+.switch-toggle-small .switch-slider::before {
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+}
+
+.switch-toggle-small input[type="checkbox"]:checked + .switch-slider::before {
+  transform: translateX(16px);
+}
+
+.switch-toggle-small .switch-text {
+  font-size: 13px;
+}
+
+/* ============================================
+   LEGEND & COLORMAP
+   ============================================ */
+
+.legend {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.legend-gradient {
+  margin-bottom: 4px;
+}
+
+.legend-gradient-bar {
+  height: 20px;
+  width: 100%;
+  border-radius: 4px;
+  background: linear-gradient(to right, 
+    rgb(253, 231, 37) 0%,
+    rgb(181, 222, 43) 11.11%,
+    rgb(110, 206, 88) 22.22%,
+    rgb(53, 183, 121) 33.33%,
+    rgb(31, 158, 137) 44.44%,
+    rgb(38, 130, 142) 55.56%,
+    rgb(49, 104, 142) 66.67%,
+    rgb(62, 73, 137) 77.78%,
+    rgb(72, 40, 120) 88.89%,
+    rgb(68, 1, 84) 100%
+  );
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s;
+}
+
+.legend-gradient-bar:hover {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(0, 102, 255, 0.3);
+}
+
+.legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+/* Colormap Preview */
+.colormap-preview-container {
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.colormap-preview-container.show {
+  display: grid;
+}
+
+.colormap-preview {
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  padding: 2px;
+  transition: all 0.2s;
+}
+
+.colormap-preview:hover {
+  border-color: #0066ff;
+  transform: translateY(-1px);
+}
+
+.colormap-preview.active {
+  border-color: #0066ff;
+  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
+}
+
+.colormap-preview-bar {
+  height: 16px;
+  width: 100%;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   EXPORT BUTTON (sekundäre Aktion)
+   ============================================ */
+
+.export-button {
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  color: #555;
+  border: 1px solid #888;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+}
+
+.export-button:hover:not(:disabled) {
+  border-color: #0066ff;
+  background: #f5f8ff;
+  color: #0066ff;
+}
+
+.export-button:focus-visible {
+  outline: 2px solid #0066ff;
+  outline-offset: 2px;
+}
+
+.export-button:disabled {
+  background: #f5f5f5;
+  border-color: #ddd;
+  color: #999;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   TARGETS LIST
+   ============================================ */
+
+.targets-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  background: #f9f9f9;
+}
+
+.target-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: white;
+  border-radius: 4px;
+  font-size: 13px;
+  border: 1px solid #eee;
+}
+
+.target-item:last-child {
+  margin-bottom: 0;
+}
+
+.target-item-label {
+  font-weight: 500;
+  color: #333;
+  flex: 0 0 auto;
+  margin-right: 8px;
+}
+
+.target-item-coords {
+  flex: 1;
+  color: #666;
+  font-size: 11px;
+  font-family: monospace;
+  text-align: right;
+}
+
+.target-item-buttons {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-left: 8px;
+}
+
+.target-item-edit {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.target-item-edit:hover {
+  background: #2563eb;
+}
+
+.target-item-edit svg {
+  width: 12px;
+  height: 12px;
+}
+
+.target-item-remove {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background-color 0.2s;
+}
+
+.target-item-remove:hover {
+  background: #dc2626;
+}
+
+.target-item-highlighted {
+  border: 2px solid #ef4444 !important;
+  background: #fff5f5 !important;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+}
+
+.target-item-selected {
+  border: 2px solid #3b82f6 !important;
+  background: #eff6ff !important;
+}
+
+/* ============================================
+   TOOLTIPS
+   ============================================ */
+
+.route-distance-tooltip {
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.aggregated-route-tooltip {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   CONTEXT MENU
+   ============================================ */
+
+.context-menu {
+  position: fixed;
+  background: #2d2d2d;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 6px 0;
+  z-index: 2000;
+  min-width: 220px;
+  font-size: 14px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: none;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  cursor: pointer;
+  color: #e0e0e0;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.context-menu-item:hover {
+  background-color: #3d3d3d;
+  color: #ffffff;
+}
+
+.context-menu-item svg {
+  flex-shrink: 0;
+  display: block;
+}
+
+.context-menu-item span {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background-color: #404040;
+  margin: 6px 0;
+}
+
+/* ============================================
+   TARGET TOOLTIP
+   ============================================ */
+
+.target-tooltip {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+/* Target Marker Highlighting */
+.target-marker-highlighted {
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8)) drop-shadow(0 0 4px rgba(239, 68, 68, 0.6));
+  transform: scale(1.15);
+  transition: transform 0.2s ease, filter 0.2s ease;
+  z-index: 1000 !important;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.target-marker-selected {
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 2px rgba(59, 130, 246, 0.6));
+  transition: filter 0.2s ease;
+}
+
+/* ============================================
+   GEOCODER UI (Map Control)
+   ============================================ */
+
+.geocoder-map-control {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  width: 300px;
+  max-width: calc(100vw - 20px);
+}
+
+.geocoder-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+  pointer-events: none;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.geocoder-input {
+  width: 100%;
+  padding: 10px 36px 10px 38px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.geocoder-input:focus {
+  outline: none;
+  border-color: #0066ff;
+  box-shadow: 0 2px 12px rgba(0, 102, 255, 0.2);
+}
+
+.geocoder-input:focus + .geocoder-clear ~ .geocoder-icon,
+.geocoder-input:focus ~ .geocoder-icon {
+  color: #0066ff;
+}
+
+.geocoder-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: color 0.2s;
+  z-index: 1;
+  border-radius: 4px;
+}
+
+.geocoder-clear:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.geocoder-clear svg {
+  display: block;
+}
+
+.geocoder-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 2000;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.geocoder-suggestion {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.15s;
+}
+
+.geocoder-suggestion:last-child {
+  border-bottom: none;
+}
+
+.geocoder-suggestion:hover,
+.geocoder-suggestion.highlighted {
+  background-color: #f5f8ff;
+}
+
+.geocoder-suggestion-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.geocoder-suggestion-address {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+.geocoder-suggestion-type {
+  font-size: 11px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* ============================================
+   MODAL / WARNUNG
+   ============================================ */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-width: 420px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: modalFadeIn 0.2s ease-out;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  letter-spacing: -0.01em;
+}
+
+.modal-body {
+  padding: 20px 24px;
+  color: #555;
+  line-height: 1.65;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.modal-body p {
+  margin: 0 0 12px 0;
+}
+
+.modal-body p:last-child {
+  margin-bottom: 0;
+}
+
+.modal-body strong {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #eee;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 100px;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+
+.modal-btn-primary {
+  background: #0066ff;
+  color: white;
+}
+
+.modal-btn-primary:hover {
+  background: #0052cc;
+}
+
+.modal-btn-secondary {
+  background: #f3f4f6;
+  color: #333;
+}
+
+.modal-btn-secondary:hover {
+  background: #e5e7eb;
+}
