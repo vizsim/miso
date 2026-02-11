@@ -155,3 +155,4 @@ const OverpassService = {
     return this._searchAmenity(lat, lng, radius, ['bar', 'pub'], 'Bars/Kneipen', 'Unbenannte Bar');
   }
 };
+

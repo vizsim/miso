@@ -74,9 +74,9 @@ Heute: Population-Weighting hängt an UI-Checkbox + `CONFIG.POPULATION_PMTILES_U
 
 ### Phase 0 – Hygiene (kleine Schritte, wenig Risiko)
 
-- **`src/core/compat.js` entfernen** (oder bewusst reaktivieren).
-- **Benennungen/Kommentare aktualisieren** (z. B. Logo-Name in README, falls relevant).
-- **„Globale“ Abhängigkeiten dokumentieren**: Welche Dateien müssen vor welchen geladen werden (Script-Reihenfolge).
+- **`src/core/compat.js` entfernen** (oder bewusst reaktivieren). *(Erledigt: Datei entfernt; Referenz aus `README.md` entfernt.)*
+- **Benennungen/Kommentare aktualisieren** (z. B. Logo-Name in README, falls relevant). *(Erledigt: Logo-Dateiname/Projektstruktur in `README.md` bereinigt.)*
+- **„Globale“ Abhängigkeiten dokumentieren**: Welche Dateien müssen vor welchen geladen werden (Script-Reihenfolge). *(Erledigt: siehe `docs/SCRIPT_LADEREIHENFOLGE.md`.)*
 
 ### Phase 1 – Feature-orientierte Ordner (ohne Import/Export)
 
@@ -96,6 +96,10 @@ Vorschlag:
   - `core/` (config/state/events/utils), `domain/` (geo/distribution/api helpers)
 
 Wichtig: Bei Script-Projekten ist die **Lade-Reihenfolge** kritisch. Daher diese Phase nur als „Ordner verschieben + Script-Pfade in `index.html` anpassen“.
+
+Aktueller Stand:
+- **Erledigt**: `shared/` + `features/` Struktur angelegt; Scripts in `index.html` auf neue Pfade umgestellt.
+- **Bewusst vorerst unverändert**: `src/core/config.js` bleibt am alten Pfad, damit bestehende manuelle Konfig-Workflows stabil bleiben.
 
 ### Phase 2 – Entkopplung der Zuständigkeiten (innerhalb bestehender Globals)
 

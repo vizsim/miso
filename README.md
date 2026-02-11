@@ -38,34 +38,31 @@ miso/
 ├── style.css               # Layout & Komponenten
 ├── README.md
 ├── LICENSE                 # MIT
-├── bulk_router_logo.svg    # Logo
+├── miso_logo.svg           # Logo
 │
-├── docs/                   # Zusätzliche Doku (teils aus Vorprojekt)
+├── docs/                   # Doku
 │   └── ...
 │
 └── src/
     ├── app.js              # App-Initialisierung, Event-Handler, Isochrone-Logik
     │
     ├── core/
-    │   ├── config.js       # CONFIG (API-URLs, Isochrone-Defaults, …)
-    │   ├── state.js        # Globaler State (Karte, Isochronen, Marker, …)
-    │   ├── events.js       # Event-Bus
-    │   ├── utils.js        # Hilfsfunktionen
-    │   └── compat.js       # Kompatibilität
+    │   └── config.js       # CONFIG (inkl. POPULATION_PMTILES_URL)
     │
-    ├── services/
-    │   ├── isochrone-service.js   # Aufruf GraphHopper Isochrone-API
-    │   ├── overpass-service.js    # Overpass: Cafés, Restaurants, Bars
-    │   ├── export-service.js     # GeoJSON-Export
-    │   ├── route-service.js      # (Legacy/Vorprojekt)
-    │   ├── target-service.js
+    ├── shared/
+    │   ├── core/           # state, events, utils
+    │   └── domain/         # api, geo, distribution
+    │
+    ├── services/           # verbleibende Querschnittsservices
     │   ├── aggregation-service.js
-    │   └── population-service.js
+    │   ├── export-service.js
+    │   └── target-service.js
     │
-    ├── domain/
-    │   ├── api.js          # fetchIsochrone, fetchRoute, …
-    │   ├── geo.js
-    │   └── distribution.js
+    ├── features/
+    │   ├── routing/        # route-service, route-renderer, route-handler, route-warning
+    │   ├── isochrones/     # isochrone-service, isochrone-renderer, overlap-renderer
+    │   ├── population/     # population-service (PMTiles)
+    │   └── pois/           # overpass-service, poi-renderer
     │
     ├── visualization/
     │   ├── visualization.js      # Orchestrierung (Startpunkte, Marker, …)
@@ -78,16 +75,12 @@ miso/
     │   ├── colormap-utils.js
     │   └── histogram-renderer.js
     │
-    ├── ui/
+    ├── ui/                 # UI-Komponenten (ohne Routing-Warnung)
     │   ├── saved-isochrones-list.js  # Liste „Gespeicherte Startpunkte“, Edit-Modal, Farbwahl
     │   ├── targets-list.js
     │   ├── config-helpers.js
     │   ├── distribution-selector.js
-    │   ├── colormap-selector.js
-    │   └── route-warning.js
-    │
-    ├── handlers/
-    │   └── route-handler.js
+    │   └── colormap-selector.js
     │
     └── utils/
         └── geocoder.js     # Adresssuche

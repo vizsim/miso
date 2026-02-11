@@ -11,14 +11,14 @@ const CONFIG = {
   GH_ROUTE_URL: "https://ghroute.vizsim.de/route", // GraphHopper Route API
   //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
   // Isochrone API (gleicher Server, anderer Pfad)
-  GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone", // oder z.B. "http://radverkehr-analytics.inw.th-wildau.de:8979/isochrone"
+  GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone", 
   //GH_ISOCHRONE_URL: "http://localhost:8990/isochrone",
   ISOCHRONE_TIME_LIMIT: 1500, // Sekunden (wird aus Zeitlimit Min. abgeleitet)
   ISOCHRONE_BUCKET_SIZE_MIN: 5, // Bucket-Größe in Minuten (z. B. 5 → 0–5, 5–10, …); Zeitlimit nur in diesem Schritt wählbar
   ISOCHRONE_BUCKETS: 0, // wird berechnet: Zeitlimit / Bucket-Größe
   // Isochrone-Geometrie: optional auf Hex-Raster "snappen" (schneller für Turf, weniger Detail)
   ISOCHRONE_HEX_SNAP: true,
-  ISOCHRONE_HEX_CELL_SIZE_M: 100, // Basis-Zellgröße (Detailgrad): 100/250/500/1000
+  ISOCHRONE_HEX_CELL_SIZE_M: 250, // Basis-Zellgröße (Detailgrad): 100/250/500/1000
   ISOCHRONE_HEX_MAX_CELLS_PER_BUCKET: 12000, // Schutz gegen extrem viele Hex-Zellen (100m braucht mehr)
   ISOCHRONE_HEX_AUTO_UPSCALE: true, // wenn zu viele Zellen: Zellgröße automatisch vergrößern
   PROFILE: "bike", // anpassen (z.B. "foot", "bike", "cargo_bike"...)
