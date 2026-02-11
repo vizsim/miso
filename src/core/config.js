@@ -36,7 +36,6 @@ const CONFIG = {
   // Optimierung: 'none' | 'overlap' (von allen in gleicher Zeit) | 'system_optimal' (Einzugsgebiete)
   OPTIMIZATION_MODE: 'none',
   // Einwohner-Gewichtung (PMTiles): Startpunkte nach Bevölkerungsdichte
-  //POPULATION_PMTILES_URL: "https://f003.backblazeb2.com/file/erreichbarad/bb_coeff_rasters_25-05-20.pmtiles", // URL des PMTiles (100×100 m Polygone mit Einwohner); leer = deaktiviert
   POPULATION_PMTILES_URL: "https://f003.backblazeb2.com/file/unfallkarte-data/Zensus2022_100m_poly_GER_wPLZ_wRS_ew_10.pmtiles", // URL des PMTiles (100×100 m Polygone mit Einwohner); leer = deaktiviert
 
   
