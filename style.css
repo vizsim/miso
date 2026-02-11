@@ -766,6 +766,23 @@ html, body {
   cursor: not-allowed;
 }
 
+/* ============================================
+   OPTIMIZATION BUTTON ROW
+   ============================================ */
+.optimization-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.optimization-buttons .export-button {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.15;
+}
+#optimization-reset-budgets {
+  grid-column: 1 / -1; /* Reset über volle Breite */
+}
+
 /* Button „Isochronen berechnen“ */
 .btn-calculate-isochrone {
   width: 100%;
@@ -1199,6 +1216,11 @@ html, body {
   backdrop-filter: blur(2px);
 }
 
+/* Performance: Edit-Isochrone-Modal ohne backdrop-filter (Map dahinter ist teuer zu blurren) */
+#edit-isochrone-modal.modal-overlay {
+  backdrop-filter: none;
+}
+
 .modal-content {
   background: white;
   border-radius: 12px;
@@ -1212,6 +1234,64 @@ html, body {
   font-feature-settings: 'kern' 1, 'liga' 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Performance: bei diesem Modal nur leichte Opacity-Animation */
+#edit-isochrone-modal .modal-content {
+  animation: none;
+}
+
+/* ============================================
+   EDIT ISOCHRONE MODAL: Colorpicker + Geocoder
+   ============================================ */
+.modal-colorpicker {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.modal-colorpicker input[type="color"] {
+  width: 44px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+.modal-colorpicker input[type="text"] {
+  height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  box-sizing: border-box;
+}
+.modal-color-swatches {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.modal-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px solid rgba(0,0,0,0.2);
+  cursor: pointer;
+  padding: 0;
+}
+.modal-swatch:focus-visible {
+  outline: 2px solid #0066ff;
+  outline-offset: 2px;
+}
+
+/* Suggestions im Modal etwas kompakter */
+#edit-isochrone-location-suggestions.geocoder-suggestions {
+  max-height: 260px;
+  z-index: 4000;
 }
 
 @keyframes modalFadeIn {

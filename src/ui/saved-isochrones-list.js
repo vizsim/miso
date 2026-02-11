@@ -3,6 +3,8 @@ const SavedIsochronesList = {
   _container: null,
   _listGroup: null,
   _editIndex: null,
+  _editSelectedCoordinates: null, // [lat,lng] wenn Adresse ausgewählt
+  _editLocationDebounce: null,
 
   init() {
     this._container = Utils.getElement('#saved-isochrones-list');
@@ -19,6 +21,11 @@ const SavedIsochronesList = {
     const cancelBtn = Utils.getElement('#edit-isochrone-cancel');
     const profileBtns = document.querySelectorAll('#edit-isochrone-profile-btns .edit-profile-btn');
     const bucketSizeSelect = Utils.getElement('#edit-isochrone-bucket-size');
+    const colorInput = Utils.getElement('#edit-isochrone-color');
+    const colorHexInput = Utils.getElement('#edit-isochrone-color-hex');
+    const swatches = Utils.getElement('#edit-isochrone-color-swatches');
+    const locInput = Utils.getElement('#edit-isochrone-location');
+    const locSug = Utils.getElement('#edit-isochrone-location-suggestions');
     if (modal && applyBtn) {
       applyBtn.addEventListener('click', () => this._onEditApply());
       if (cancelBtn) cancelBtn.addEventListener('click', () => this._closeEditModal());
@@ -41,6 +48,96 @@ const SavedIsochronesList = {
         if (e.target === modal) SavedIsochronesList._closeEditModal();
       });
     }
+
+    // Colorpicker Sync: picker <-> hex field <-> swatches
+    const normalizeHex = (v) => {
+      const s = String(v || '').trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+      if (/^[0-9a-fA-F]{6}$/.test(s)) return ('#' + s).toLowerCase();
+      return null;
+    };
+    const setColor = (hex) => {
+      if (!hex) return;
+      if (colorInput) colorInput.value = hex;
+      if (colorHexInput) colorHexInput.value = hex;
+    };
+    if (colorInput) {
+      colorInput.addEventListener('input', () => setColor(colorInput.value));
+      colorInput.addEventListener('change', () => setColor(colorInput.value));
+    }
+    if (colorHexInput) {
+      colorHexInput.addEventListener('input', () => {
+        const n = normalizeHex(colorHexInput.value);
+        if (n && colorInput) colorInput.value = n;
+      });
+      colorHexInput.addEventListener('change', () => {
+        const n = normalizeHex(colorHexInput.value);
+        if (n) setColor(n);
+      });
+    }
+    if (swatches) {
+      swatches.querySelectorAll('button[data-color]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const n = normalizeHex(btn.getAttribute('data-color'));
+          if (n) setColor(n);
+        });
+      });
+    }
+
+    // Modal-Geocoder (Photon via Geocoder.search)
+    const escapeHtml = (text) => {
+      const div = document.createElement('div');
+      div.textContent = String(text || '');
+      return div.innerHTML;
+    };
+    const hideSug = () => { if (locSug) locSug.style.display = 'none'; };
+    const showSug = (items) => {
+      if (!locSug) return;
+      if (!items || !items.length) return hideSug();
+      locSug.innerHTML = items.map((s, i) => `
+        <div class="geocoder-suggestion" data-index="${i}">
+          <div class="geocoder-suggestion-name">${escapeHtml(s.name)}</div>
+          <div class="geocoder-suggestion-address">${escapeHtml(s.address)}</div>
+          <div class="geocoder-suggestion-type">${escapeHtml(s.type)}</div>
+        </div>
+      `).join('');
+      locSug.style.display = 'block';
+      locSug.querySelectorAll('.geocoder-suggestion').forEach((el, i) => {
+        el.addEventListener('click', () => {
+          const s = items[i];
+          if (!s || !s.coordinates) return;
+          this._editSelectedCoordinates = s.coordinates;
+          if (locInput) locInput.value = s.address || s.name || '';
+          hideSug();
+        });
+      });
+    };
+    const runSearch = async (q) => {
+      if (!locInput || !locSug) return;
+      const query = String(q || '').trim();
+      if (query.length < 2) return hideSug();
+      const map = State.getMap && State.getMap();
+      const center = map ? map.getCenter() : null;
+      const res = (typeof Geocoder !== 'undefined' && Geocoder.search)
+        ? await Geocoder.search(query, { lat: center?.lat, lng: center?.lng, limit: 8 })
+        : [];
+      showSug(res || []);
+    };
+    if (locInput) {
+      locInput.addEventListener('input', () => {
+        this._editSelectedCoordinates = null; // nur Auswahl zählt
+        if (this._editLocationDebounce) clearTimeout(this._editLocationDebounce);
+        this._editLocationDebounce = setTimeout(() => runSearch(locInput.value), 250);
+      });
+      locInput.addEventListener('focus', () => {
+        if (locSug && locSug.innerHTML.trim()) locSug.style.display = 'block';
+      });
+    }
+    document.addEventListener('click', (e) => {
+      if (!locSug || !locInput) return;
+      if (e.target === locInput || locSug.contains(e.target)) return;
+      hideSug();
+    });
   },
 
   _openEditModal(index) {
@@ -64,6 +161,8 @@ const SavedIsochronesList = {
     const bucketSizeSelect = Utils.getElement('#edit-isochrone-bucket-size');
     const timeInput = Utils.getElement('#edit-isochrone-time');
     const colorInput = Utils.getElement('#edit-isochrone-color');
+    const colorHexInput = Utils.getElement('#edit-isochrone-color-hex');
+    const locInput = Utils.getElement('#edit-isochrone-location');
     const profileBtns = document.querySelectorAll('#edit-isochrone-profile-btns .edit-profile-btn');
     if (bucketSizeSelect) bucketSizeSelect.value = String(bucketSizeMin);
     if (timeInput) {
@@ -71,7 +170,14 @@ const SavedIsochronesList = {
       timeInput.step = bucketSizeMin;
       timeInput.value = timeClamped;
     }
-    if (colorInput) colorInput.value = (item.color && /^#[0-9a-fA-F]{6}$/.test(item.color)) ? item.color : '#3388ff';
+    const c = (item.color && /^#[0-9a-fA-F]{6}$/.test(item.color)) ? item.color : '#3388ff';
+    if (colorInput) colorInput.value = c;
+    if (colorHexInput) colorHexInput.value = c;
+    this._editSelectedCoordinates = null;
+    if (locInput) {
+      locInput.value = '';
+      locInput.placeholder = `Aktuell: ${item.center ? (item.center[0].toFixed(5) + ', ' + item.center[1].toFixed(5)) : 'Position'}`;
+    }
     if (profileBtns.length) {
       profileBtns.forEach(function(btn) {
         btn.classList.toggle('active', (btn.dataset.profile || '') === profile);
@@ -98,6 +204,7 @@ const SavedIsochronesList = {
 
   _closeEditModal() {
     this._editIndex = null;
+    this._editSelectedCoordinates = null;
     const modal = Utils.getElement('#edit-isochrone-modal');
     if (modal) modal.style.display = 'none';
   },
@@ -109,19 +216,26 @@ const SavedIsochronesList = {
     const timeInput = Utils.getElement('#edit-isochrone-time');
     const bucketSizeSelect = Utils.getElement('#edit-isochrone-bucket-size');
     const colorInput = Utils.getElement('#edit-isochrone-color');
+    const colorHexInput = Utils.getElement('#edit-isochrone-color-hex');
     const profileBtns = document.querySelectorAll('#edit-isochrone-profile-btns .edit-profile-btn');
     const bucketSizeMin = bucketSizeSelect ? parseInt(bucketSizeSelect.value, 10) || 5 : 5;
     const timeMin = timeInput ? Math.max(bucketSizeMin, Math.min(120, parseInt(timeInput.value, 10) || bucketSizeMin)) : bucketSizeMin;
     const buckets = Math.round(timeMin / bucketSizeMin) || 1;
-    const color = (colorInput && /^#[0-9a-fA-F]{6}$/.test(colorInput.value)) ? colorInput.value : '#3388ff';
+    const rawColor = (colorHexInput && colorHexInput.value) ? colorHexInput.value : (colorInput ? colorInput.value : '');
+    const color = /^#?[0-9a-fA-F]{6}$/.test(rawColor)
+      ? (rawColor.startsWith('#') ? rawColor : ('#' + rawColor)).toLowerCase()
+      : '#3388ff';
     let profile = 'foot';
     if (profileBtns.length) {
       const active = Array.from(profileBtns).find(function(b) { return b.classList.contains('active'); });
       if (active) profile = active.dataset.profile || 'foot';
     }
+    const selectedCoords = this._editSelectedCoordinates; // vor dem Schließen sichern
     this._closeEditModal();
     if (typeof App !== 'undefined' && App._onEditSavedIsochroneConfig) {
-      App._onEditSavedIsochroneConfig(Number(index), { time_limit: timeMin * 60, buckets: buckets, profile: profile, color: color });
+      const cfg = { time_limit: timeMin * 60, buckets: buckets, profile: profile, color: color };
+      if (selectedCoords) cfg.center = selectedCoords;
+      App._onEditSavedIsochroneConfig(Number(index), cfg);
     }
   },
 

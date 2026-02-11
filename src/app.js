@@ -861,19 +861,26 @@ const App = {
       if (statusEl) statusEl.textContent = `Berechne Isochronen neu… (${targetBuckets} Buckets)`;
 
       const savedAll = State.getSavedIsochrones() || [];
-      for (const it of includedSaved) {
-        const result = await IsochroneService.fetchIsochrone(it.center, {
-          time_limit: targetTimeLimit,
-          buckets: targetBuckets,
-          profile: it.profile ?? CONFIG.PROFILE,
-          silent: true
-        });
-        if (!result) continue;
+      const fetched = await this._mapWithConcurrency(includedSaved, 3, async (it) => {
+        try {
+          return await IsochroneService.fetchIsochrone(it.center, {
+            time_limit: targetTimeLimit,
+            buckets: targetBuckets,
+            profile: it.profile ?? CONFIG.PROFILE,
+            silent: true
+          });
+        } catch (_) {
+          return null;
+        }
+      });
+      includedSaved.forEach((it, i) => {
+        const result = fetched[i];
+        if (!result) return;
         const idx = savedAll.findIndex(x => x.id === it.id);
         if (idx >= 0) {
           savedAll[idx] = { ...savedAll[idx], ...result, id: savedAll[idx].id, color: savedAll[idx].color, visible: savedAll[idx].visible };
         }
-      }
+      });
       State.setSavedIsochrones([...savedAll]);
       if (SavedIsochronesList && SavedIsochronesList.update) SavedIsochronesList.update();
 
@@ -891,6 +898,37 @@ const App = {
     } finally {
       this._optimizationExtendingBuckets = false;
     }
+  },
+
+  /**
+   * Führt async 작업 mit Concurrency-Limit aus (z. B. mehrere GH-Isochronen parallel).
+   * @template T,U
+   * @param {T[]} items
+   * @param {number} limit
+   * @param {(item: T, index: number) => Promise<U>} mapper
+   * @returns {Promise<(U|null)[]>}
+   */
+  async _mapWithConcurrency(items, limit, mapper) {
+    const arr = Array.isArray(items) ? items : [];
+    const n = arr.length;
+    const results = new Array(n).fill(null);
+    const k = Math.max(1, Math.min(limit || 1, n));
+    let next = 0;
+    const worker = async () => {
+      while (true) {
+        const i = next++;
+        if (i >= n) break;
+        try {
+          results[i] = await mapper(arr[i], i);
+        } catch (_) {
+          results[i] = null;
+        }
+      }
+    };
+    const workers = [];
+    for (let i = 0; i < k; i++) workers.push(worker());
+    await Promise.all(workers);
+    return results;
   },
 
   _enforceOverlapBudgets(statusEl) {
@@ -1324,7 +1362,12 @@ const App = {
     if (!saved || !Array.isArray(saved) || i < 0 || i >= saved.length) return;
     const item = saved[i];
     if (!item || !item.center) return;
-    const center = item.center.slice ? item.center.slice() : [item.center[0], item.center[1]];
+    const newCenter = (config && Array.isArray(config.center) && config.center.length === 2)
+      ? [Number(config.center[0]), Number(config.center[1])]
+      : null;
+    const center = newCenter && !isNaN(newCenter[0]) && !isNaN(newCenter[1])
+      ? newCenter
+      : (item.center.slice ? item.center.slice() : [item.center[0], item.center[1]]);
     Utils.showInfo('Isochrone wird neu berechnet…', false);
     const result = await IsochroneService.fetchIsochrone(center, {
       time_limit: config.time_limit,

@@ -17,14 +17,17 @@ function getBucketStyle(bucket, buckets, baseRgb) {
   if (!rgb) return { fillColor: DEFAULT_ISOCHRONE_COLOR, fillOpacity: 0.5, strokeOpacity: 0.9, weight: 3 };
   const n = Math.max(1, buckets);
   const t = n === 1 ? 1 : 1 - bucket / (n - 1); // 1 innen, 0 außen
-  // Nicht-linear: mittlere Buckets etwas kräftiger, äußerster Rand etwas transparenter
-  const tEase = Math.pow(Math.max(0, Math.min(1, t)), 0.6);
-  const r = Math.round(rgb.r * t + ISOCHRONE_WHITE.r * (1 - t));
-  const g = Math.round(rgb.g * t + ISOCHRONE_WHITE.g * (1 - t));
-  const b = Math.round(rgb.b * t + ISOCHRONE_WHITE.b * (1 - t));
+  const tClamped = Math.max(0, Math.min(1, t));
+  // Opacity: außen deutlich schwächer, innen kräftiger (Exponent > 1 drückt kleine Werte nach unten)
+  const tOpacity = Math.pow(tClamped, 1.5);
+  // Farbe: außen nicht komplett weiß, sondern behält etwas Basisfarbe
+  const tColor = 0.18 + 0.82 * Math.pow(tClamped, 1.15);
+  const r = Math.round(rgb.r * tColor + ISOCHRONE_WHITE.r * (1 - tColor));
+  const g = Math.round(rgb.g * tColor + ISOCHRONE_WHITE.g * (1 - tColor));
+  const b = Math.round(rgb.b * tColor + ISOCHRONE_WHITE.b * (1 - tColor));
   const fillColor = `rgb(${r},${g},${b})`;
-  const fillOpacity = 0.12 + 0.58 * tEase; // innen ~0.70, Mitte kräftiger, außen ~0.12
-  const strokeOpacity = 0.65 + 0.30 * tEase; // innen etwas kräftiger, außen etwas leichter
+  const fillOpacity = 0.08 + 0.35 * tOpacity; // innen ~0.85, außen ~0.05
+  const strokeOpacity = 0.55 + 0.40 * tOpacity; // innen ~0.95, außen ~0.55
   return { fillColor, fillOpacity, strokeOpacity };
 }
 
@@ -119,85 +122,47 @@ const IsochroneRenderer = {
         className: 'isochrone-tooltip'
       });
 
-      // Hover: Rand hervorheben, ohne Layer-Reihenfolge zu zerstören
-      // (kein bringToFront; stattdessen Outline in eigenem Pane ganz oben)
-      polygon._hoverOutlineLayers = [];
-      polygon._hoverOutlineTimer = null;
-      const ensureOutlinePane = () => {
-        const map = State.getMap && State.getMap();
-        if (!map || !map.createPane || !map.getPane) return null;
-        const name = 'isochrone-hover-outline';
-        if (!map.getPane(name)) {
-          const pane = map.createPane(name);
-          pane.style.zIndex = 900; // über Isochronen
-          pane.style.pointerEvents = 'none';
-        }
-        return name;
+      // Hover: Tooltip zuerst, dann dezentes Highlight (ohne zusätzliche Layer, damit nichts "hängen bleibt")
+      const _origHoverStyle = {
+        weight: polygon.options.weight,
+        opacity: polygon.options.opacity,
+        color: polygon.options.color
       };
-      const extractOuterRings = (latlngsAny) => {
-        const isLatLng = (x) => x && typeof x.lat === 'number' && typeof x.lng === 'number';
-        if (!Array.isArray(latlngsAny) || latlngsAny.length === 0) return [];
-
-        // Ring: [LatLng, LatLng, ...]
-        if (isLatLng(latlngsAny[0])) return [latlngsAny];
-
-        // Polygon: [ ring, hole, ... ] where ring is [LatLng...]
-        if (Array.isArray(latlngsAny[0]) && latlngsAny[0].length && isLatLng(latlngsAny[0][0])) {
-          return [latlngsAny[0]];
+      polygon._hoverTimer = null;
+      const clearHover = () => {
+        if (polygon._hoverTimer) {
+          clearTimeout(polygon._hoverTimer);
+          polygon._hoverTimer = null;
         }
-
-        // MultiPolygon: [ [ring, ...], [ring, ...], ... ]
-        if (
-          Array.isArray(latlngsAny[0]) &&
-          latlngsAny[0].length &&
-          Array.isArray(latlngsAny[0][0]) &&
-          latlngsAny[0][0].length &&
-          isLatLng(latlngsAny[0][0][0])
-        ) {
-          return latlngsAny
-            .map(poly => (Array.isArray(poly) && poly[0] && poly[0].length ? poly[0] : null))
-            .filter(Boolean);
+        try {
+          polygon.setStyle({
+            weight: _origHoverStyle.weight,
+            opacity: _origHoverStyle.opacity,
+            color: _origHoverStyle.color
+          });
+        } catch (_) {
+          // ignore
         }
-
-        return [];
       };
       polygon.on('mouseover', () => {
-        // Tooltip zuerst anzeigen (und erst danach Outline zeichnen)
         if (polygon.openTooltip) polygon.openTooltip();
-        if (polygon._hoverOutlineTimer) {
-          clearTimeout(polygon._hoverOutlineTimer);
-          polygon._hoverOutlineTimer = null;
-        }
-        const paneName = ensureOutlinePane();
-        const latlngsAny = polygon.getLatLngs ? polygon.getLatLngs() : null;
-        if (!latlngsAny) return;
-
-        const outlines = extractOuterRings(latlngsAny);
-        polygon._hoverOutlineTimer = setTimeout(() => {
-          outlines.forEach(ring => {
-            const outline = L.polyline(ring, {
-              pane: paneName || undefined,
-              color: '#444',
-              weight: 3,
-              opacity: 0.9
+        if (polygon._hoverTimer) clearTimeout(polygon._hoverTimer);
+        polygon._hoverTimer = setTimeout(() => {
+          try {
+            polygon.setStyle({
+              weight: (_origHoverStyle.weight || 3) + 1,
+              opacity: 1,
+              color: '#444'
             });
-            outline._isIsochroneHoverOutline = true;
-            outline.addTo(layerGroup);
-            polygon._hoverOutlineLayers.push(outline);
-          });
-          polygon._hoverOutlineTimer = null;
+          } catch (_) {
+            // ignore
+          }
+          polygon._hoverTimer = null;
         }, 60);
       });
-      polygon.on('mouseout', () => {
-        if (polygon._hoverOutlineTimer) {
-          clearTimeout(polygon._hoverOutlineTimer);
-          polygon._hoverOutlineTimer = null;
-        }
-        if (polygon._hoverOutlineLayers && polygon._hoverOutlineLayers.length) {
-          polygon._hoverOutlineLayers.forEach(l => { try { layerGroup.removeLayer(l); } catch (_) {} });
-          polygon._hoverOutlineLayers = [];
-        }
-      });
+      polygon.on('mouseout', clearHover);
+      polygon.on('tooltipclose', clearHover);
+      polygon.on('remove', clearHover);
 
       polygon.addTo(layerGroup);
       layers.push(polygon);

@@ -75,13 +75,14 @@
             </div>
             <label for="config-isochrone-hex-size">Hex-Detailgrad</label>
             <select id="config-isochrone-hex-size">
-              <option value="100">Sehr fein (100 m)</option>
-              <option value="250" selected>Fein (250 m)</option>
+              <option value="100" selected>Sehr fein (100 m)</option>
+              <option value="250">Fein (250 m)</option>
               <option value="500">Mittel (500 m)</option>
               <option value="1000">Grob (1000 m)</option>
             </select>
             <p class="config-hint" style="font-size: 11px; color: #666; margin-top: 4px;">
               Hilft v. a. bei Städten: weniger Polygon-Punkte → Turf-Operationen schneller. Kleinere Hexe = mehr Detail, aber langsamer.
+              Wenn es zu viele Zellen werden, wird automatisch grober gerastert.
             </p>
           </div>
         </div>
@@ -152,10 +153,10 @@
 
             <div id="optimization-starts-container" style="margin-top: 10px;"></div>
 
-            <div style="display:flex; gap: 8px; margin-top: 10px;">
-              <button type="button" id="optimization-enforce-overlap" class="export-button" style="flex: 1;">Overlap erzwingen</button>
-              <button type="button" id="optimization-add-buckets" class="export-button" style="flex: 1;">Mehr Buckets (+1) berechnen</button>
-              <button type="button" id="optimization-reset-budgets" class="export-button" style="flex: 1;">Reset</button>
+            <div class="optimization-buttons" style="margin-top: 10px;">
+              <button type="button" id="optimization-enforce-overlap" class="export-button">Overlap erzwingen</button>
+              <button type="button" id="optimization-add-buckets" class="export-button">Mehr Buckets (+1)</button>
+              <button type="button" id="optimization-reset-budgets" class="export-button">Reset</button>
             </div>
             <div id="optimization-status" class="config-hint" style="font-size: 11px; color: #666; margin-top: 6px;"></div>
           </div>
@@ -172,14 +173,14 @@
       <div class="github-links">
         <img src="https://img.shields.io/badge/Status-Experimental-red" alt="Status: Experimental" class="status-badge">
         <div style="flex: 1;"></div>
-        <a href="https://github.com/vizsim/routing_bulk" target="_blank" rel="noopener noreferrer" 
+        <a href="https://github.com/vizsim/miso target="_blank" rel="noopener noreferrer" 
            title="GitHub Repository" 
            class="github-link">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
           </svg>
         </a>
-        <a href="https://github.com/vizsim/routing_bulk/issues" target="_blank" rel="noopener noreferrer" 
+        <a href="https://github.com/vizsim/miso/issues" target="_blank" rel="noopener noreferrer" 
            title="Fehler melden oder Feedback geben"
            class="github-link">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -268,6 +269,15 @@
         <h3 class="modal-title" id="edit-isochrone-modal-title">Startpunkt bearbeiten</h3>
       </div>
       <div class="modal-body">
+        <div class="config-group modal-geocoder" style="margin-bottom: 10px; position: relative;">
+          <label for="edit-isochrone-location">Startpunkt (Adresse):</label>
+          <input type="text" id="edit-isochrone-location" placeholder="Adresse suchen…" autocomplete="off" />
+          <div id="edit-isochrone-location-suggestions" class="geocoder-suggestions" style="display:none;"></div>
+          <p class="config-hint" style="font-size: 11px; color: #666; margin-top: 4px;">
+            Tipp: Adresse auswählen → Startpunkt wird dorthin verschoben und Isochrone neu berechnet.
+          </p>
+        </div>
+
         <div class="config-group" style="margin-bottom: 10px;">
           <label for="edit-isochrone-bucket-size">Bucket-Größe (Min.):</label>
           <select id="edit-isochrone-bucket-size">
@@ -283,8 +293,22 @@
           <input type="number" id="edit-isochrone-time" min="5" max="120" step="5" value="10" />
         </div>
         <div class="config-group" style="margin-bottom: 10px;">
-          <label for="edit-isochrone-color">Hauptfarbe:</label>
-          <input type="color" id="edit-isochrone-color" value="#3388ff" title="Farbe der Isochrone für diesen Startpunkt" style="width: 100%; height: 36px; padding: 2px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px;" />
+          <label>Hauptfarbe:</label>
+          <div class="modal-colorpicker">
+            <input type="color" id="edit-isochrone-color" value="#3388ff" title="Farbe wählen" />
+            <input type="text" id="edit-isochrone-color-hex" value="#3388ff" inputmode="text" autocapitalize="off" spellcheck="false" />
+            <div class="modal-color-swatches" id="edit-isochrone-color-swatches">
+              <button type="button" class="modal-swatch" data-color="#3388ff" style="background:#3388ff" aria-label="Blau"></button>
+              <button type="button" class="modal-swatch" data-color="#22c55e" style="background:#22c55e" aria-label="Grün"></button>
+              <button type="button" class="modal-swatch" data-color="#f59e0b" style="background:#f59e0b" aria-label="Orange"></button>
+              <button type="button" class="modal-swatch" data-color="#ef4444" style="background:#ef4444" aria-label="Rot"></button>
+              <button type="button" class="modal-swatch" data-color="#a855f7" style="background:#a855f7" aria-label="Violett"></button>
+              <button type="button" class="modal-swatch" data-color="#111827" style="background:#111827" aria-label="Schwarz"></button>
+            </div>
+          </div>
+          <p class="config-hint" style="font-size: 11px; color: #666; margin-top: 4px;">
+            Hex eingeben oder Picker/Palette nutzen.
+          </p>
         </div>
         <div class="config-group">
           <label>Profil:</label>

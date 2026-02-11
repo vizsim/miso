@@ -156,6 +156,142 @@ const OverlapRenderer = {
     return (bucketIndex + 0.5) * (timeLimit / n);
   },
 
+  _isH3HexIsochroneFeature(feature) {
+    const props = feature?.properties || {};
+    return props._hex_snapped === true && props._hex_method === 'h3' && typeof props._hex_res === 'number';
+  },
+
+  _getH3CellsForFeature(feature, targetRes) {
+    if (typeof h3 === 'undefined') return null;
+    const res = feature?.__h3Res ?? feature?.properties?._hex_res;
+    let cells = feature?.__h3Cells;
+    if (!Array.isArray(cells) || cells.length === 0) return null;
+    if (typeof targetRes === 'number' && typeof res === 'number' && res > targetRes) {
+      // auf gemeinsame gröbere Auflösung runterziehen
+      const set = new Set();
+      for (const c of cells) {
+        try { set.add(h3.cellToParent(c, targetRes)); } catch (_) {}
+      }
+      cells = Array.from(set);
+    }
+    return cells;
+  },
+
+  _intersectionSets(aSet, bSet) {
+    // iteriere über kleineres Set
+    const out = new Set();
+    if (!aSet || !bSet) return out;
+    const [small, large] = aSet.size <= bSet.size ? [aSet, bSet] : [bSet, aSet];
+    for (const v of small) if (large.has(v)) out.add(v);
+    return out;
+  },
+
+  /**
+   * Fast-Path für Hex-Modus: partitioniert die gemeinsame Fläche über H3-Zellmengen
+   * (kein Turf intersect/difference).
+   */
+  computeSystemOptimalCatchmentsH3(savedIsochrones, options = {}) {
+    if (typeof h3 === 'undefined' || !h3.cellsToMultiPolygon) {
+      console.warn('[OverlapRenderer] H3 nicht geladen.');
+      return [];
+    }
+    if (!savedIsochrones || savedIsochrones.length < 2) return [];
+
+    const first = savedIsochrones[0];
+    const buckets = first.buckets != null ? first.buckets : 5;
+    const timeLimit = first.time_limit != null ? first.time_limit : 600;
+    const maxBucketByIndex = Array.isArray(options.maxBucketByIndex) ? options.maxBucketByIndex : null;
+
+    // gemeinsame (gröbste) H3-Resolution wählen, damit Starts kompatibel sind
+    const resList = [];
+    for (const item of savedIsochrones) {
+      const feat0 = (item.polygons || []).find(f => this._isH3HexIsochroneFeature(f));
+      const r = feat0?.properties?._hex_res;
+      if (typeof r === 'number') resList.push(r);
+    }
+    if (resList.length < savedIsochrones.length) return [];
+    const commonRes = Math.min(...resList);
+
+    // pro Start: kumulative Sets C_b (bis maxBucket) und daraus Ring-Sets R_b + cell->bucket Map
+    const perStart = savedIsochrones.map((item, idx) => {
+      const polygons = item.polygons || [];
+      const maxBucket = Math.max(0, Math.min(buckets - 1, (maxBucketByIndex?.[idx] ?? (buckets - 1))));
+      const cumulativeSets = new Array(maxBucket + 1).fill(null);
+      for (let b = 0; b <= maxBucket; b++) {
+        const feat = polygons.find(f => (f.properties?.bucket ?? f.bucket) === b);
+        if (!feat || !this._isH3HexIsochroneFeature(feat)) return null;
+        const cells = this._getH3CellsForFeature(feat, commonRes);
+        if (!cells) return null;
+        cumulativeSets[b] = new Set(cells);
+      }
+      const ringSets = new Array(maxBucket + 1).fill(null);
+      const cellToBucket = new Map();
+      let prev = new Set();
+      for (let b = 0; b <= maxBucket; b++) {
+        const cur = cumulativeSets[b];
+        const ring = new Set();
+        for (const c of cur) {
+          if (!prev.has(c)) {
+            ring.add(c);
+            cellToBucket.set(c, b);
+          }
+        }
+        ringSets[b] = ring;
+        prev = cur;
+      }
+      return { maxBucket, cumulativeSets, ringSets, cellToBucket };
+    });
+
+    if (perStart.some(x => !x)) return [];
+
+    // gemeinsame Fläche: Intersection der äußeren kumulativen Sets
+    let common = null;
+    for (let s = 0; s < perStart.length; s++) {
+      const outer = perStart[s].cumulativeSets[perStart[s].maxBucket];
+      common = common ? this._intersectionSets(common, outer) : new Set(outer);
+      if (common.size === 0) return [];
+    }
+
+    // Zellen nach Bucket-Tuple gruppieren (diskret) -> 1 MultiPolygon pro Gruppe
+    const groups = new Map(); // key -> { bucketIndices, cells: [] }
+    for (const cell of common) {
+      const bucketIndices = perStart.map(ps => ps.cellToBucket.get(cell));
+      if (bucketIndices.some(v => typeof v !== 'number')) continue;
+      const key = bucketIndices.join(',');
+      let g = groups.get(key);
+      if (!g) {
+        g = { bucketIndices, cells: [] };
+        groups.set(key, g);
+      }
+      g.cells.push(cell);
+    }
+
+    const results = [];
+    for (const g of groups.values()) {
+      if (!g.cells.length) continue;
+      let mpCoords = null;
+      try {
+        mpCoords = h3.cellsToMultiPolygon(g.cells, true);
+      } catch (_) {
+        mpCoords = null;
+      }
+      if (!mpCoords || !mpCoords.length) continue;
+
+      const sumSec = g.bucketIndices.reduce((acc, b) => acc + this._bucketMidpointSec(b, timeLimit, buckets), 0);
+      const avgSec = sumSec / Math.max(1, g.bucketIndices.length);
+      const timeLabels = g.bucketIndices.map(b => IsochroneRenderer.getTimeBucketLabel(b, timeLimit, buckets));
+      results.push({
+        feature: { type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: mpCoords }, properties: {} },
+        bucketIndices: g.bucketIndices,
+        timeLabels,
+        sumSec,
+        avgSec
+      });
+    }
+
+    return results;
+  },
+
   /**
    * Systemoptimale Einzugsgebiete: Pro (Start, Bucket) die Fläche, die dieser Start
    * am schnellsten erreicht (ohne Flächen, die ein anderer Start schneller erreicht).
@@ -163,6 +299,18 @@ const OverlapRenderer = {
    * @returns {Array} - [{ startIndex, bucket, timeLabel, feature, color }, ...] (feature kann Polygon/MultiPolygon sein)
    */
   computeSystemOptimalCatchments(savedIsochrones, options = {}) {
+    // Fast path: Hex/H3 vorhanden -> Set-basierte Partitionierung
+    try {
+      const allHaveH3 = Array.isArray(savedIsochrones) && savedIsochrones.length >= 2 && savedIsochrones.every(item => {
+        const p = item.polygons || [];
+        const any = p.find(f => (f.properties?.bucket ?? f.bucket) === 0);
+        return any && this._isH3HexIsochroneFeature(any) && typeof h3 !== 'undefined';
+      });
+      if (allHaveH3) return this.computeSystemOptimalCatchmentsH3(savedIsochrones, options);
+    } catch (_) {
+      // fallback below
+    }
+
     if (typeof turf === 'undefined' || !turf.difference || !(turf.intersect || turf.intersection)) {
       console.warn('[OverlapRenderer] Turf.js (difference/intersect) nicht geladen.');
       return [];
@@ -330,42 +478,40 @@ const OverlapRenderer = {
           offset: [0, -8],
           className: 'isochrone-tooltip overlap-tooltip'
         });
-        // Tooltip zuerst, dann (leicht) Rand highlighten
-        poly._hoverOutlineLayers = [];
-        poly._hoverOutlineTimer = null;
-        const ensurePane = () => {
-          const map = State.getMap && State.getMap();
-          if (!map || !map.createPane || !map.getPane) return null;
-          const name = 'isochrone-hover-outline';
-          if (!map.getPane(name)) {
-            const pane = map.createPane(name);
-            pane.style.zIndex = 900;
-            pane.style.pointerEvents = 'none';
-          }
-          return name;
+        // Tooltip zuerst, dann (leicht) Rand highlighten – ohne Extra-Layer
+        const _origHoverStyle = {
+          weight: poly.options.weight,
+          opacity: poly.options.opacity,
+          color: poly.options.color
+        };
+        poly._hoverTimer = null;
+        const clearHover = () => {
+          if (poly._hoverTimer) { clearTimeout(poly._hoverTimer); poly._hoverTimer = null; }
+          try {
+            poly.setStyle({
+              weight: _origHoverStyle.weight,
+              opacity: _origHoverStyle.opacity,
+              color: _origHoverStyle.color
+            });
+          } catch (_) {}
         };
         poly.on('mouseover', () => {
           if (poly.openTooltip) poly.openTooltip();
-          if (poly._hoverOutlineTimer) { clearTimeout(poly._hoverOutlineTimer); poly._hoverOutlineTimer = null; }
-          const paneName = ensurePane();
-          const rings = poly.getLatLngs ? poly.getLatLngs() : null;
-          if (!rings) return;
-          // Polygon: [outer, holes...] -> take outer
-          const outer = Array.isArray(rings[0]) ? rings[0] : rings;
-          poly._hoverOutlineTimer = setTimeout(() => {
-            const outline = L.polyline(outer, { pane: paneName || undefined, color: '#444', weight: 3, opacity: 0.9 });
-            outline.addTo(layerGroup);
-            poly._hoverOutlineLayers.push(outline);
-            poly._hoverOutlineTimer = null;
+          if (poly._hoverTimer) clearTimeout(poly._hoverTimer);
+          poly._hoverTimer = setTimeout(() => {
+            try {
+              poly.setStyle({
+                weight: (_origHoverStyle.weight || 2) + 1,
+                opacity: 1,
+                color: '#444'
+              });
+            } catch (_) {}
+            poly._hoverTimer = null;
           }, 60);
         });
-        poly.on('mouseout', () => {
-          if (poly._hoverOutlineTimer) { clearTimeout(poly._hoverOutlineTimer); poly._hoverOutlineTimer = null; }
-          if (poly._hoverOutlineLayers && poly._hoverOutlineLayers.length) {
-            poly._hoverOutlineLayers.forEach(l => { try { layerGroup.removeLayer(l); } catch (_) {} });
-            poly._hoverOutlineLayers = [];
-          }
-        });
+        poly.on('mouseout', clearHover);
+        poly.on('tooltipclose', clearHover);
+        poly.on('remove', clearHover);
         poly.addTo(layerGroup);
         layers.push(poly);
       } else if (geom.type === 'MultiPolygon' && geom.coordinates) {
@@ -381,40 +527,39 @@ const OverlapRenderer = {
               offset: [0, -8],
               className: 'isochrone-tooltip overlap-tooltip'
             });
-            poly._hoverOutlineLayers = [];
-            poly._hoverOutlineTimer = null;
-            const ensurePane = () => {
-              const map = State.getMap && State.getMap();
-              if (!map || !map.createPane || !map.getPane) return null;
-              const name = 'isochrone-hover-outline';
-              if (!map.getPane(name)) {
-                const pane = map.createPane(name);
-                pane.style.zIndex = 900;
-                pane.style.pointerEvents = 'none';
-              }
-              return name;
+            const _origHoverStyle = {
+              weight: poly.options.weight,
+              opacity: poly.options.opacity,
+              color: poly.options.color
+            };
+            poly._hoverTimer = null;
+            const clearHover = () => {
+              if (poly._hoverTimer) { clearTimeout(poly._hoverTimer); poly._hoverTimer = null; }
+              try {
+                poly.setStyle({
+                  weight: _origHoverStyle.weight,
+                  opacity: _origHoverStyle.opacity,
+                  color: _origHoverStyle.color
+                });
+              } catch (_) {}
             };
             poly.on('mouseover', () => {
               if (poly.openTooltip) poly.openTooltip();
-              if (poly._hoverOutlineTimer) { clearTimeout(poly._hoverOutlineTimer); poly._hoverOutlineTimer = null; }
-              const paneName = ensurePane();
-              const rings = poly.getLatLngs ? poly.getLatLngs() : null;
-              if (!rings) return;
-              const outer = Array.isArray(rings[0]) ? rings[0] : rings;
-              poly._hoverOutlineTimer = setTimeout(() => {
-                const outline = L.polyline(outer, { pane: paneName || undefined, color: '#444', weight: 3, opacity: 0.9 });
-                outline.addTo(layerGroup);
-                poly._hoverOutlineLayers.push(outline);
-                poly._hoverOutlineTimer = null;
+              if (poly._hoverTimer) clearTimeout(poly._hoverTimer);
+              poly._hoverTimer = setTimeout(() => {
+                try {
+                  poly.setStyle({
+                    weight: (_origHoverStyle.weight || 2) + 1,
+                    opacity: 1,
+                    color: '#444'
+                  });
+                } catch (_) {}
+                poly._hoverTimer = null;
               }, 60);
             });
-            poly.on('mouseout', () => {
-              if (poly._hoverOutlineTimer) { clearTimeout(poly._hoverOutlineTimer); poly._hoverOutlineTimer = null; }
-              if (poly._hoverOutlineLayers && poly._hoverOutlineLayers.length) {
-                poly._hoverOutlineLayers.forEach(l => { try { layerGroup.removeLayer(l); } catch (_) {} });
-                poly._hoverOutlineLayers = [];
-              }
-            });
+            poly.on('mouseout', clearHover);
+            poly.on('tooltipclose', clearHover);
+            poly.on('remove', clearHover);
             poly.addTo(layerGroup);
             layers.push(poly);
           }

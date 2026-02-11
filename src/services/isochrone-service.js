@@ -72,7 +72,8 @@ const IsochroneService = {
       : (feats.find(f => (f.properties?.bucket ?? f.bucket) === maxBucket) || feats[0]);
 
     const requestedM = cellSizeM || 250;
-    let res = this._h3ResolutionForCellSizeM(requestedM);
+    const requestedRes = this._h3ResolutionForCellSizeM(requestedM);
+    let res = requestedRes;
     const max = maxCells || 2500;
 
     const polyfillAtRes = (feature, useRes) => {
@@ -108,6 +109,7 @@ const IsochroneService = {
       tries++;
     }
     if (!outerCells.length || outerCells.length > max) return null;
+    const upscaled = res !== requestedRes;
 
     // Effektive Zellgröße (zur Diagnose)
     let effectiveEdgeM = requestedM;
@@ -131,7 +133,7 @@ const IsochroneService = {
         mpCoords = null;
       }
       if (!mpCoords || !mpCoords.length) return f;
-      return {
+      const out = {
         type: 'Feature',
         properties: {
           ...props,
@@ -140,6 +142,8 @@ const IsochroneService = {
           _hex_res: res,
           _hex_cell_m: effectiveEdgeM,
           _hex_requested_m: requestedM,
+          _hex_requested_res: requestedRes,
+          _hex_upscaled: upscaled,
           _hex_cells: cells.length
         },
         geometry: {
@@ -147,6 +151,10 @@ const IsochroneService = {
           coordinates: mpCoords
         }
       };
+      // In-Memory Cache: H3-Zellen für schnelle Set-Optimierungen (nicht serialisiert)
+      out.__h3Cells = cells;
+      out.__h3Res = res;
+      return out;
     });
   },
 
