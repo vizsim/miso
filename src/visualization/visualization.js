@@ -52,7 +52,7 @@ const Visualization = {
   
   /**
    * Hilfsfunktion: Findet den Index eines Zielpunkts für einen Marker
-   * @param {L.Marker} marker - Der Marker
+   * @param {Object} marker - Der Marker
    * @returns {number} - Index oder -1
    */
   _getTargetIndexForMarker(marker) {
@@ -85,27 +85,26 @@ const Visualization = {
   
   /**
    * Zeichnet einen Startpunkt für Isochronen als blauen, verschiebbaren Kreis.
-   * @param {L.LatLng|[number,number]} latlng
+   * @param {Object|[number,number]} latlng
    * @param {Object} options - { index: number|null (bei gespeicherten Punkten), onDragEnd: function(newLatLng) }
-   * @returns {L.Marker}
+   * @returns {Object}
    */
   drawIsochroneStartPoint(latlng, options = {}) {
     const layerGroup = State.getLayerGroup();
     if (!layerGroup) return null;
-    const ll = Array.isArray(latlng) ? L.latLng(latlng[0], latlng[1]) : latlng;
+    const ll = Array.isArray(latlng) ? { lat: latlng[0], lng: latlng[1] } : latlng;
     const color = (options.color && /^#[0-9a-fA-F]{6}$/.test(options.color)) ? options.color : '#3388ff';
 
-    const blueCircleIcon = L.divIcon({
+    const blueCircleIcon = MapRenderer.createDivIcon({
       className: 'isochrone-start-point-icon',
       html: `<div class="isochrone-start-point-inner" style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
       iconSize: [12, 12],
       iconAnchor: [6, 6]
     });
 
-    const marker = L.marker(ll, {
+    const marker = MapRenderer.createMarker(ll, {
       icon: blueCircleIcon,
-      draggable: true,
-      zIndexOffset: 150
+      draggable: true
     }).addTo(layerGroup);
 
     if (options.index !== undefined && options.index !== null) {
@@ -147,7 +146,7 @@ const Visualization = {
     }
     
     // SVG-Icon für Zielpunkt
-    const targetIcon = L.divIcon({
+    const targetIcon = MapRenderer.createDivIcon({
       className: 'target-point-icon',
       html: `
         <svg width="24" height="24" viewBox="0 0 24 24" fill="#ef4444" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -166,10 +165,9 @@ const Visualization = {
       iconAnchor: [12, 12]
     });
     
-    const marker = L.marker(latlng, { 
+    const marker = MapRenderer.createMarker(latlng, {
       icon: targetIcon,
-      draggable: true,
-      zIndexOffset: 200 // Höher als Startpunkte, damit Zielpunkte immer vorne sind
+      draggable: true
     }).addTo(layerGroup);
     
     // Opacity basierend auf CONFIG.HIDE_TARGET_POINTS setzen
@@ -217,8 +215,8 @@ const Visualization = {
   
   /**
    * Behandelt das Draggen eines Zielpunkt-Markers
-   * @param {L.Marker} marker - Der Marker
-   * @param {Object} e - Leaflet Drag-Event
+   * @param {Object} marker - Der Marker
+   * @param {Object} e - Drag-Event
    */
   async _handleTargetDrag(marker, e) {
     try {
@@ -420,7 +418,7 @@ const Visualization = {
   
   /**
    * Zeigt das Kontextmenü für einen Zielpunkt
-   * @param {Object} e - Leaflet Event
+   * @param {Object} e - Event
    * @param {number} index - Index des Zielpunkts
    */
   _showTargetContextMenu(e, index) {
@@ -429,7 +427,12 @@ const Visualization = {
     
     // Menü-Position setzen
     const map = State.getMap();
-    const point = map.mouseEventToContainerPoint(e.originalEvent);
+    const container = map && map.getContainer ? map.getContainer() : null;
+    const rect = container ? container.getBoundingClientRect() : { left: 0, top: 0 };
+    const point = {
+      x: (e.originalEvent?.clientX || 0) - rect.left,
+      y: (e.originalEvent?.clientY || 0) - rect.top
+    };
     contextMenu.style.left = `${point.x}px`;
     contextMenu.style.top = `${point.y}px`;
     contextMenu.style.display = 'block';
@@ -519,7 +522,7 @@ const Visualization = {
     // Wichtig: Startpunkte haben auch _targetLatLng, daher müssen wir prüfen ob es KEIN Startpunkt ist
     layerGroup.eachLayer(layer => {
       // Prüfe ob es ein Marker ist und ob er ein Zielpunkt-Marker ist (nicht ein Startpunkt)
-      if (layer instanceof L.Marker && 
+      if (MapRenderer.isMarker(layer) &&
           layer._targetLatLng && 
           layer._startIndex === undefined) { // Startpunkte haben _startIndex, Zielpunkte nicht
         // Prüfe ob Marker noch auf der Karte ist
@@ -558,7 +561,7 @@ const Visualization = {
       const color = colors[index] || '#0066ff'; // Fallback falls keine Farbe vorhanden
       
       // Erstelle ein Circle-Icon für den Marker
-      const icon = L.divIcon({
+      const icon = MapRenderer.createDivIcon({
         className: 'start-point-marker',
         html: `<div style="
           width: ${size}px;
@@ -575,10 +578,9 @@ const Visualization = {
       
       // Erstelle einen draggable Marker
       // zIndexOffset niedriger als Zielpunkte, damit Startpunkte dahinter sind
-      const marker = L.marker(s, {
+      const marker = MapRenderer.createMarker(s, {
         icon: icon,
-        draggable: true,
-        zIndexOffset: 100 // Niedriger als Zielpunkte (die haben default 200)
+        draggable: true
       }).addTo(layerGroup);
       
       // Zielpunkt im Marker speichern (für Drag-Event)

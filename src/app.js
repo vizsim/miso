@@ -105,13 +105,16 @@ const App = {
         if (idx >= 0) {
           saved[idx] = { ...saved[idx], ...result };
           State.setSavedIsochrones([...saved]);
+          // Bestehenden Startpunkt aktualisieren: vollständiges Redraw nötig.
+          this._redrawAllSavedIsochrones();
         } else {
           const id = State.getNextIsochroneId();
           State.incrementNextIsochroneId();
           saved.push({ id, visible: true, color: '#3388ff', ...result });
           State.setSavedIsochrones(saved);
+          // Neuer Startpunkt: inkrementell rendern statt alles neu zu zeichnen.
+          this._appendSavedIsochroneRender(saved[saved.length - 1], saved.length - 1);
         }
-        this._redrawAllSavedIsochrones();
         SavedIsochronesList.update();
       }
     } else {
@@ -145,7 +148,7 @@ const App = {
         const saved = State.getSavedIsochrones();
         saved.push({ id, visible: true, color: '#3388ff', ...data });
         State.setSavedIsochrones(saved);
-        this._redrawAllSavedIsochrones();
+        this._appendSavedIsochroneRender(saved[saved.length - 1], saved.length - 1);
         SavedIsochronesList.update();
       } else {
         MapRenderer.clearIsochrones();
@@ -570,6 +573,68 @@ const App = {
   },
 
   /**
+   * Zeichnet einen gespeicherten Isochronen-Startpunkt inkrementell (ohne Full-Redraw).
+   * Wird bei neu hinzugefügten Startpunkten im "Startpunkte merken"-Modus verwendet.
+   */
+  _appendSavedIsochroneRender(item, index) {
+    if (!item) return;
+    const layerGroup = State.getLayerGroup();
+    if (!layerGroup) return;
+
+    const isVisible = item.visible !== false;
+    const currentLayers = State.getIsochronePolygonLayers() || [];
+    const currentMarkers = State.getSavedIsochroneMarkers() || [];
+    while (currentMarkers.length <= index) currentMarkers.push(null);
+
+    if (isVisible) {
+      const newLayers = IsochroneRenderer.drawIsochrones(item);
+      State.setIsochronePolygonLayers([...currentLayers, ...newLayers]);
+      const marker = Visualization.drawIsochroneStartPoint(item.center, {
+        index,
+        color: item.color,
+        onDragEnd: (newLatLng) => this._onSavedIsochroneStartPointDragged(index, newLatLng),
+        onSelect: () => {
+          State.setSelectedIsochroneStartKey(index);
+          this.applyIsochroneSelectionHighlight();
+        }
+      });
+      if (marker) marker._isSavedIsochroneCenter = true;
+      currentMarkers[index] = marker || null;
+      State.setSavedIsochroneMarkers(currentMarkers);
+    } else {
+      State.setIsochronePolygonLayers(currentLayers);
+      currentMarkers[index] = null;
+      State.setSavedIsochroneMarkers(currentMarkers);
+    }
+
+    this._recomputeSavedOverlapIfNeeded();
+    this._updateNoTargetHint();
+    this._renderOptimizationAdvancedControls();
+  },
+
+  _recomputeSavedOverlapIfNeeded() {
+    MapRenderer.clearOverlap();
+    const saved = State.getSavedIsochrones() || [];
+    const visibleSaved = saved.filter(item => item.visible !== false);
+    const mode = CONFIG.OPTIMIZATION_MODE || 'none';
+    if (typeof OverlapRenderer === 'undefined' || visibleSaved.length < 2 || mode === 'none') return;
+    const { includedSaved, maxBucketByIndex } = this._getOptimizationSelectionAndBudgets(visibleSaved);
+    if (mode === 'overlap') {
+      if (includedSaved.length >= 2) {
+        const overlapResults = OverlapRenderer.computeOverlapPerBucket(includedSaved);
+        const overlapLayers = OverlapRenderer.drawOverlaps(overlapResults);
+        State.setOverlapPolygonLayers(overlapLayers);
+      }
+      return;
+    }
+    if (mode === 'system_optimal' && includedSaved.length >= 2) {
+      const catchmentResults = OverlapRenderer.computeSystemOptimalCatchments(includedSaved, { maxBucketByIndex });
+      const overlapLayers = OverlapRenderer.drawSystemOptimalCatchments(catchmentResults, includedSaved);
+      State.setOverlapPolygonLayers(overlapLayers);
+    }
+  },
+
+  /**
    * Zeichnet alle gespeicherten Isochronen und deren Startpunkt-Marker neu
    */
   _redrawAllSavedIsochrones() {
@@ -603,25 +668,7 @@ const App = {
     });
     State.setIsochronePolygonLayers(allLayers);
     State.setSavedIsochroneMarkers(markers);
-    MapRenderer.clearOverlap();
-    const visibleSaved = saved.filter(item => item.visible !== false);
-    const mode = CONFIG.OPTIMIZATION_MODE || 'none';
-    if (typeof OverlapRenderer !== 'undefined' && visibleSaved.length >= 2) {
-      const { includedSaved, maxBucketByIndex } = this._getOptimizationSelectionAndBudgets(visibleSaved);
-      if (mode === 'overlap') {
-        if (includedSaved.length >= 2) {
-          const overlapResults = OverlapRenderer.computeOverlapPerBucket(includedSaved);
-          const overlapLayers = OverlapRenderer.drawOverlaps(overlapResults);
-          State.setOverlapPolygonLayers(overlapLayers);
-        }
-      } else if (mode === 'system_optimal') {
-        if (includedSaved.length >= 2) {
-          const catchmentResults = OverlapRenderer.computeSystemOptimalCatchments(includedSaved, { maxBucketByIndex });
-          const overlapLayers = OverlapRenderer.drawSystemOptimalCatchments(catchmentResults, includedSaved);
-          State.setOverlapPolygonLayers(overlapLayers);
-        }
-      }
-    }
+    this._recomputeSavedOverlapIfNeeded();
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
@@ -1199,7 +1246,7 @@ const App = {
     let oldMarker = null;
     if (layerGroup) {
       layerGroup.eachLayer(layer => {
-        if (layer instanceof L.Marker && 
+        if (MapRenderer.isMarker(layer) &&
             layer._targetLatLng && 
             TargetService.isEqual(layer._targetLatLng, currentTarget) &&
             layer._targetIndex === undefined) {

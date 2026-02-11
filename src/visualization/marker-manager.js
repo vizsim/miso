@@ -96,7 +96,7 @@ const MarkerManager = {
     // Prüfe auch alle Marker auf der Karte, die nicht im State sind
     // (in einem Durchgang, Performance-Optimierung)
     layerGroup.eachLayer(layer => {
-      if (layer instanceof L.Marker && 
+      if (MapRenderer.isMarker(layer) &&
           layer._targetLatLng && 
           layer._targetIndex !== undefined) {
         

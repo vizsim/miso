@@ -11,8 +11,8 @@ html, body {
   height: 100%; 
 }
 
-/* Leaflet Zoom Controls Position (unten links) */
-.leaflet-bottom.leaflet-left {
+/* MapLibre Zoom Controls Position (unten links) */
+.maplibregl-ctrl-bottom-left {
   bottom: 10px;
   left: 10px;
 }

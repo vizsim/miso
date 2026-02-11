@@ -21,6 +21,7 @@ const CONFIG = {
   ISOCHRONE_HEX_CELL_SIZE_M: 250, // Basis-Zellgröße (Detailgrad): 100/250/500/1000
   ISOCHRONE_HEX_MAX_CELLS_PER_BUCKET: 12000, // Schutz gegen extrem viele Hex-Zellen (100m braucht mehr)
   ISOCHRONE_HEX_AUTO_UPSCALE: true, // wenn zu viele Zellen: Zellgröße automatisch vergrößern
+  ISOCHRONE_DEBUG_BUCKETS: false, // Debug: Bucket-Infos (Typ/Fläche/BBox) in Konsole ausgeben
   PROFILE: "bike", // anpassen (z.B. "foot", "bike", "cargo_bike"...)
   N: 10, // Anzahl der Routen
   RADIUS_M: 2000, // Radius in Metern für Startpunkte

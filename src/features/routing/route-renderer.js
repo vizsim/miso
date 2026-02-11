@@ -19,7 +19,7 @@ const RouteRenderer = {
    * @param {Object} ghResponse - GraphHopper Response
    * @param {string} color - Farbe
    * @param {number} [distanceM] - Routenlänge in m (aus paths[].distance), optional
-   * @returns {L.Polyline|null} - Polyline oder null
+   * @returns {Object|null} - Polyline-Layer oder null
    */
   drawRoute(ghResponse, color, distanceM) {
     const latlngs = API.extractRouteCoordinates(ghResponse);
@@ -35,7 +35,7 @@ const RouteRenderer = {
 
     const distance = distanceM ?? API.extractRouteDistance(ghResponse);
 
-    const polyline = L.polyline(latlngs, {
+    const polyline = MapRenderer.createPolyline(latlngs, {
       weight: 3,
       opacity: 0.8,
       color: color
@@ -86,7 +86,7 @@ const RouteRenderer = {
       // Farbe basierend auf gewichtetem Level
       const color = ColormapUtils.getColorForCount(seg.count, weightedLevel);
       
-      const polyline = L.polyline([seg.start, seg.end], {
+      const polyline = MapRenderer.createPolyline([seg.start, seg.end], {
         weight: weight,
         opacity: opacity,
         color: color

@@ -90,7 +90,7 @@ const OverlapRenderer = {
   /**
    * Zeichnet die Überlappungs-Polygone auf der Karte.
    * @param {Array} overlapResults - Ergebnis von computeOverlapPerBucket
-   * @returns {L.Layer[]} - Gezeichnete Layer
+   * @returns {Object[]} - Gezeichnete Layer
    */
   drawOverlaps(overlapResults) {
     const layerGroup = State.getLayerGroup();
@@ -103,7 +103,7 @@ const OverlapRenderer = {
       const geom = feature.geometry;
       if (geom.type === 'Polygon' && geom.coordinates && geom.coordinates[0]) {
         const latlngs = geom.coordinates[0].map(c => [c[1], c[0]]);
-        const poly = L.polygon(latlngs, {
+        const poly = MapRenderer.createPolygon(latlngs, {
           color: OVERLAP_COLOR,
           fillColor: OVERLAP_COLOR,
           fillOpacity: OVERLAP_FILL_OPACITY,
@@ -122,7 +122,7 @@ const OverlapRenderer = {
         geom.coordinates.forEach(ring => {
           if (ring && ring[0]) {
             const latlngs = ring[0].map(c => [c[1], c[0]]);
-            const poly = L.polygon(latlngs, {
+            const poly = MapRenderer.createPolygon(latlngs, {
               color: OVERLAP_COLOR,
               fillColor: OVERLAP_COLOR,
               fillOpacity: OVERLAP_FILL_OPACITY,
@@ -418,7 +418,7 @@ const OverlapRenderer = {
    * Zeichnet systemoptimale Einzugsgebiete (pro Start/Bucket mit Startfarbe).
    * @param {Array} catchmentResults - Ergebnis von computeSystemOptimalCatchments
    * @param {Array} savedIsochrones - für Start-Labels
-   * @returns {L.Layer[]}
+   * @returns {Object[]}
    */
   drawSystemOptimalCatchments(catchmentResults, savedIsochrones) {
     const layerGroup = State.getLayerGroup();
@@ -469,7 +469,7 @@ const OverlapRenderer = {
       };
       if (geom.type === 'Polygon' && geom.coordinates && geom.coordinates[0]) {
         const latlngs = geom.coordinates[0].map(c => [c[1], c[0]]);
-        const poly = L.polygon(latlngs, opts);
+        const poly = MapRenderer.createPolygon(latlngs, opts);
         poly._isOverlapLayer = true;
         poly.bindTooltip(tooltipHtml, {
           permanent: false,
@@ -480,13 +480,11 @@ const OverlapRenderer = {
         });
         // Tooltip zuerst, dann (leicht) Rand highlighten – ohne Extra-Layer
         const _origHoverStyle = {
-          weight: poly.options.weight,
-          opacity: poly.options.opacity,
-          color: poly.options.color
+          weight: poly.options?.weight ?? opts.weight ?? 2,
+          opacity: poly.options?.opacity ?? opts.opacity ?? 0.9,
+          color: poly.options?.color ?? opts.color ?? '#444'
         };
-        poly._hoverTimer = null;
         const clearHover = () => {
-          if (poly._hoverTimer) { clearTimeout(poly._hoverTimer); poly._hoverTimer = null; }
           try {
             poly.setStyle({
               weight: _origHoverStyle.weight,
@@ -497,17 +495,13 @@ const OverlapRenderer = {
         };
         poly.on('mouseover', () => {
           if (poly.openTooltip) poly.openTooltip();
-          if (poly._hoverTimer) clearTimeout(poly._hoverTimer);
-          poly._hoverTimer = setTimeout(() => {
-            try {
-              poly.setStyle({
-                weight: (_origHoverStyle.weight || 2) + 1,
-                opacity: 1,
-                color: '#444'
-              });
-            } catch (_) {}
-            poly._hoverTimer = null;
-          }, 60);
+          try {
+            poly.setStyle({
+              weight: (_origHoverStyle.weight || 2) + 1,
+              opacity: 1,
+              color: '#444'
+            });
+          } catch (_) {}
         });
         poly.on('mouseout', clearHover);
         poly.on('tooltipclose', clearHover);
@@ -518,7 +512,7 @@ const OverlapRenderer = {
         geom.coordinates.forEach(ring => {
           if (ring && ring[0]) {
             const latlngs = ring[0].map(c => [c[1], c[0]]);
-            const poly = L.polygon(latlngs, opts);
+            const poly = MapRenderer.createPolygon(latlngs, opts);
             poly._isOverlapLayer = true;
             poly.bindTooltip(tooltipHtml, {
               permanent: false,
@@ -528,13 +522,11 @@ const OverlapRenderer = {
               className: 'isochrone-tooltip overlap-tooltip'
             });
             const _origHoverStyle = {
-              weight: poly.options.weight,
-              opacity: poly.options.opacity,
-              color: poly.options.color
+              weight: poly.options?.weight ?? opts.weight ?? 2,
+              opacity: poly.options?.opacity ?? opts.opacity ?? 0.9,
+              color: poly.options?.color ?? opts.color ?? '#444'
             };
-            poly._hoverTimer = null;
             const clearHover = () => {
-              if (poly._hoverTimer) { clearTimeout(poly._hoverTimer); poly._hoverTimer = null; }
               try {
                 poly.setStyle({
                   weight: _origHoverStyle.weight,
@@ -545,17 +537,13 @@ const OverlapRenderer = {
             };
             poly.on('mouseover', () => {
               if (poly.openTooltip) poly.openTooltip();
-              if (poly._hoverTimer) clearTimeout(poly._hoverTimer);
-              poly._hoverTimer = setTimeout(() => {
-                try {
-                  poly.setStyle({
-                    weight: (_origHoverStyle.weight || 2) + 1,
-                    opacity: 1,
-                    color: '#444'
-                  });
-                } catch (_) {}
-                poly._hoverTimer = null;
-              }, 60);
+              try {
+                poly.setStyle({
+                  weight: (_origHoverStyle.weight || 2) + 1,
+                  opacity: 1,
+                  color: '#444'
+                });
+              } catch (_) {}
             });
             poly.on('mouseout', clearHover);
             poly.on('tooltipclose', clearHover);

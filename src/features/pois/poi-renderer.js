@@ -10,7 +10,7 @@ const PoiRenderer = {
     const style = POI_STYLE[poiType] || POI_STYLE.cafe;
     const baseSize = Math.max(10, Math.min(36, 10 + (zoom - 10) * 2.8));
     const borderWidth = zoom < 13 ? 1.5 : 2;
-    return L.divIcon({
+    return MapRenderer.createDivIcon({
       className: 'poi-marker-icon',
       html: `
         <div style="
@@ -50,7 +50,7 @@ const PoiRenderer = {
 
     places.forEach(place => {
       if (place.type === 'way' && place.coordinates && place.coordinates.length >= 3) {
-        const poly = L.polygon(place.coordinates, {
+        const poly = MapRenderer.createPolygon(place.coordinates, {
           color: POI_STYLE[poiType].color,
           fillColor: POI_STYLE[poiType].fill,
           fillOpacity: 0.3,
@@ -67,14 +67,14 @@ const PoiRenderer = {
         coords.forEach(c => { clat += c[0]; clng += c[1]; });
         clat /= coords.length;
         clng /= coords.length;
-        const m = L.marker([clat, clng], { icon }).addTo(layerGroup);
+        const m = MapRenderer.createMarker([clat, clng], { icon }).addTo(layerGroup);
         m._isPoiLayer = true;
         m._poiType = poiType;
         m._poiId = place.id;
         m.bindPopup(createPopup(place), { maxWidth: 250, className: 'poi-popup' });
         layers.push(m);
       } else if (place.lat != null && place.lng != null) {
-        const m = L.marker([place.lat, place.lng], { icon }).addTo(layerGroup);
+        const m = MapRenderer.createMarker([place.lat, place.lng], { icon }).addTo(layerGroup);
         m._isPoiLayer = true;
         m._poiType = poiType;
         m._poiId = place.id;
@@ -100,7 +100,7 @@ const PoiRenderer = {
     const setter = poiType === 'cafe' ? 'setCafeSearchRadiusCircle' : poiType === 'restaurant' ? 'setRestaurantSearchRadiusCircle' : 'setBarSearchRadiusCircle';
     const oldCircle = State[getter]();
     if (oldCircle) layerGroup.removeLayer(oldCircle);
-    const circle = L.circle([lat, lng], {
+    const circle = MapRenderer.createCircle([lat, lng], {
       radius: radiusMeters,
       color: '#666',
       fillColor: '#999',
@@ -130,7 +130,7 @@ const PoiRenderer = {
     const layers = State[getter]() || [];
     const newIcon = this.createPoiIcon(map.getZoom(), poiType);
     layers.forEach(layer => {
-      if (layer instanceof L.Marker && layer._isPoiLayer && layer._poiType === poiType) {
+      if (MapRenderer.isMarker(layer) && layer._isPoiLayer && layer._poiType === poiType) {
         layer.setIcon(newIcon);
       }
     });
