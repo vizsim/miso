@@ -10,7 +10,18 @@ const CONFIG = {
   //GH_ROUTE_URL: "https://ghroute.duckdns.org/route", // GraphHopper Route API
   GH_ROUTE_URL: "https://ghroute.vizsim.de/route", // GraphHopper Route API
   //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
-  PROFILE: "foot", // anpassen (z.B. "foot", "bike", "bike2", "mtb"...)
+  // Isochrone API (gleicher Server, anderer Pfad)
+  GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone", // oder z.B. "http://radverkehr-analytics.inw.th-wildau.de:8979/isochrone"
+  //GH_ISOCHRONE_URL: "http://localhost:8990/isochrone",
+  ISOCHRONE_TIME_LIMIT: 1500, // Sekunden (wird aus Zeitlimit Min. abgeleitet)
+  ISOCHRONE_BUCKET_SIZE_MIN: 5, // Bucket-Größe in Minuten (z. B. 5 → 0–5, 5–10, …); Zeitlimit nur in diesem Schritt wählbar
+  ISOCHRONE_BUCKETS: 0, // wird berechnet: Zeitlimit / Bucket-Größe
+  // Isochrone-Geometrie: optional auf Hex-Raster "snappen" (schneller für Turf, weniger Detail)
+  ISOCHRONE_HEX_SNAP: false,
+  ISOCHRONE_HEX_CELL_SIZE_M: 250, // Basis-Zellgröße (Detailgrad): 100/250/500/1000
+  ISOCHRONE_HEX_MAX_CELLS_PER_BUCKET: 2500, // Schutz gegen extrem viele Hex-Zellen
+  ISOCHRONE_HEX_AUTO_UPSCALE: true, // wenn zu viele Zellen: Zellgröße automatisch vergrößern
+  PROFILE: "bike", // anpassen (z.B. "foot", "bike", "cargo_bike"...)
   N: 10, // Anzahl der Routen
   RADIUS_M: 2000, // Radius in Metern für Startpunkte
   MAP_CENTER: [52.6858, 14.10078], // [lat, lon]
@@ -21,6 +32,9 @@ const CONFIG = {
   HIDE_TARGET_POINTS: false, // Zielpunkte ausblenden
   COLORMAP: "viridis_r", // Colormap: "viridis_r", "plasma_r", "inferno_r", "magma_r"
   REMEMBER_TARGETS: false, // Zielpunkte merken
+  REMEMBER_ISOCHRONE_STARTS: false, // Startpunkte (Isochronen) merken
+  // Optimierung: 'none' | 'overlap' (von allen in gleicher Zeit) | 'system_optimal' (Einzugsgebiete)
+  OPTIMIZATION_MODE: 'none',
   // Einwohner-Gewichtung (PMTiles): Startpunkte nach Bevölkerungsdichte
   //POPULATION_PMTILES_URL: "https://f003.backblazeb2.com/file/erreichbarad/bb_coeff_rasters_25-05-20.pmtiles", // URL des PMTiles (100×100 m Polygone mit Einwohner); leer = deaktiviert
   POPULATION_PMTILES_URL: "https://f003.backblazeb2.com/file/unfallkarte-data/Zensus2022_100m_poly_GER_wPLZ_wRS_ew_10.pmtiles", // URL des PMTiles (100×100 m Polygone mit Einwohner); leer = deaktiviert
@@ -39,5 +53,13 @@ const CONFIG = {
  */
 function isRememberMode() {
   return CONFIG.REMEMBER_TARGETS === true;
+}
+
+/**
+ * Prüft ob der "Startpunkte merken" Modus für Isochronen aktiv ist
+ * @returns {boolean}
+ */
+function isRememberIsochroneStarts() {
+  return CONFIG.REMEMBER_ISOCHRONE_STARTS === true;
 }
 

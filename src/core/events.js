@@ -72,6 +72,10 @@ const Events = {
   ROUTES_UPDATED: 'routes:updated',
   ROUTE_UPDATED: 'route:updated',
   
+  // Isochrone Events
+  ISOCHRONE_CALCULATED: 'isochrone:calculated',
+  ISOCHRONE_CALCULATING: 'isochrone:calculating',
+  
   // Map Events
   MAP_CLICK: 'map:click',
   MAP_READY: 'map:ready',

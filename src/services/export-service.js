@@ -1,10 +1,87 @@
 // ==== Export-Service: Export-Funktionalität ====
 const ExportService = {
   /**
+   * Exportiert Isochrone(n) als GeoJSON. Bei "Startpunkte merken" alle gespeicherten, sonst die aktuelle.
+   */
+  exportIsochroneToGeoJSON() {
+    const saved = State.getSavedIsochrones();
+    const single = State.getLastIsochroneResult();
+    const hasSaved = saved && saved.length > 0;
+    const hasSingle = single && single.polygons && single.polygons.length > 0;
+
+    if (!hasSaved && !hasSingle) {
+      Utils.showError('Keine Isochrone zum Exportieren vorhanden.', true);
+      return;
+    }
+
+    const allFeatures = [];
+    const metaCenters = [];
+
+    if (hasSaved) {
+      saved.forEach((result, idx) => {
+        metaCenters.push(result.center);
+        (result.polygons || []).forEach((f, i) => {
+          allFeatures.push({
+            type: 'Feature',
+            geometry: f.geometry || { type: 'Polygon', coordinates: f.coordinates || [] },
+            properties: {
+              center_index: idx,
+              center: result.center,
+              bucket: f.properties?.bucket ?? f.bucket ?? i,
+              time_limit_sec: result.time_limit,
+              buckets: result.buckets,
+              profile: result.profile
+            }
+          });
+        });
+      });
+    } else {
+      metaCenters.push(single.center);
+      single.polygons.forEach((f, i) => {
+        allFeatures.push({
+          type: 'Feature',
+          geometry: f.geometry || { type: 'Polygon', coordinates: f.coordinates || [] },
+          properties: {
+            bucket: f.properties?.bucket ?? f.bucket ?? i,
+            time_limit_sec: single.time_limit,
+            buckets: single.buckets,
+            profile: single.profile
+          }
+        });
+      });
+    }
+
+    const geoJson = {
+      type: 'FeatureCollection',
+      features: allFeatures,
+      metadata: {
+        exportDate: new Date().toISOString(),
+        centers: metaCenters,
+        count: metaCenters.length
+      }
+    };
+    const blob = new Blob([JSON.stringify(geoJson, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `isochrones_${new Date().toISOString().split('T')[0]}.geojson`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    EventBus.emit(Events.EXPORT_COMPLETED, { format: 'geojson' });
+  },
+
+  /**
    * Exportiert Routen als GeoJSON.
    * Im Modus "Zielpunkte merken" werden Routen aller Zielpunkte exportiert (mit targetId/targetIndex pro Route).
    */
   exportToGeoJSON() {
+    const hasIso = State.getLastIsochroneResult() || (State.getSavedIsochrones() && State.getSavedIsochrones().length > 0);
+    if (hasIso) {
+      this.exportIsochroneToGeoJSON();
+      return;
+    }
     const rememberMode = typeof isRememberMode === 'function' && isRememberMode();
     const targetRoutes = State.getTargetRoutes();
 

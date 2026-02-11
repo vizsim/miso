@@ -283,15 +283,14 @@ const MapRenderer = {
       if (currentTargetMarker && !targetMarkers.includes(currentTargetMarker)) update(currentTargetMarker);
     };
 
-    // Zoom-Event: Schul- und Haltestellen-Icons aktualisieren + Marker-Positionen synchronisieren (Debounce)
+    // Zoom-Event: POI-Icons (Cafés, Restaurants, Bars) aktualisieren + Marker-Positionen synchronisieren (Debounce)
     let zoomUpdateTimeout = null;
     const onViewChange = () => {
       if (zoomUpdateTimeout) clearTimeout(zoomUpdateTimeout);
       zoomUpdateTimeout = setTimeout(() => {
         zoomUpdateTimeout = null;
         syncMarkerPositions();
-        Visualization.updateSchoolIcons();
-        Visualization.updatePlatformIcons();
+        Visualization.updatePoiIcons();
       }, 100);
     };
     map.on("zoomend", onViewChange);
@@ -388,169 +387,41 @@ const MapRenderer = {
       });
     }
     
-    // Schulen suchen
-    const schoolsBtn = Utils.getElement('#context-menu-schools');
-    if (schoolsBtn) {
-      schoolsBtn.addEventListener('click', async () => {
-        if (contextMenuLatLng) {
-          contextMenu.style.display = 'none';
-          
-          // Alten Radius-Kreis entfernen (falls vorhanden)
-          Visualization.clearSchoolSearchRadius();
-          
-          // Radius für Suche (500m)
-          const searchRadius = 1000;
-          
-          // Radius-Kreis anzeigen
-          Visualization.drawSchoolSearchRadius(
-            contextMenuLatLng.lat,
-            contextMenuLatLng.lng,
-            searchRadius
-          );
-          
-          // Lade-Indikator anzeigen
-          Utils.showInfo('Suche nach Schulen...', false);
-          
-          try {
-            // Schulen suchen
-            const schools = await OverpassService.searchSchools(
-              contextMenuLatLng.lat,
-              contextMenuLatLng.lng,
-              searchRadius
-            );
-            
-            if (schools.length === 0) {
-              Utils.showInfo('Keine Schulen in der Nähe gefunden.', false);
-              // Kreis nach 3 Sekunden ausblenden
-              setTimeout(() => {
-                Visualization.clearSchoolSearchRadius();
-              }, 3000);
-              return;
-            }
-            
-            // Alte Schulen holen und neue hinzufügen (nicht ersetzen)
-            const oldSchoolLayers = State.getSchoolMarkers() || [];
-            const newSchoolLayers = Visualization.drawSchools(schools);
-            
-            // Alle Schulen zusammenführen
-            const allSchoolLayers = [...oldSchoolLayers, ...newSchoolLayers];
-            State.setSchoolMarkers(allSchoolLayers);
-            
-            // Erfolgsmeldung
-            Utils.showInfo(`${schools.length} Schule${schools.length !== 1 ? 'n' : ''} gefunden.`, false);
-            
-            // Radius-Kreis nach 3 Sekunden ausblenden
-            setTimeout(() => {
-              Visualization.clearSchoolSearchRadius();
-            }, 3000);
-            
-            // Karte zu den neuen Schulen zoomen (falls mehrere gefunden)
-            if (newSchoolLayers.length > 0) {
-              const bounds = [];
-              newSchoolLayers.forEach(layer => {
-                // Marker haben getLatLng(), Polygone haben getBounds()
-                if (layer.getLatLng) {
-                  bounds.push(layer.getLatLng());
-                } else if (layer.getBounds) {
-                  bounds.push(layer.getBounds().getCenter());
-                }
-              });
-              bounds.push(contextMenuLatLng); // Auch die Klick-Position einbeziehen
-              
-              if (bounds.length > 0) {
-                const latlngs = bounds.map(b => [b.lat, b.lng]);
-                this._map.fitBounds(latlngs, { padding: [50, 50], maxZoom: 16 });
-              }
-            }
-          } catch (error) {
-            console.error('Fehler bei Schul-Suche:', error);
-            Utils.showError('Fehler beim Laden der Schulen.', true);
-          }
+    const searchRadius = 600;
+    const runPoiSearch = async (poiType, searchFn, entityLabel, getMarkers, setMarkers, drawFn, drawRadiusFn, clearRadiusFn) => {
+      if (!contextMenuLatLng) return;
+      contextMenu.style.display = 'none';
+      clearRadiusFn();
+      drawRadiusFn(contextMenuLatLng.lat, contextMenuLatLng.lng, searchRadius);
+      Utils.showInfo(`Suche nach ${entityLabel}...`, false);
+      try {
+        const places = await searchFn(contextMenuLatLng.lat, contextMenuLatLng.lng, searchRadius);
+        if (places.length === 0) {
+          Utils.showInfo(`Keine ${entityLabel} in der Nähe gefunden.`, false);
+          setTimeout(() => clearRadiusFn(), 3000);
+          return;
         }
-      });
-    }
-    
-    // ÖPNV-Haltestellen suchen
-    const platformsBtn = Utils.getElement('#context-menu-platforms');
-    if (platformsBtn) {
-      platformsBtn.addEventListener('click', async () => {
-        if (contextMenuLatLng) {
-          contextMenu.style.display = 'none';
-          
-          // Alten Radius-Kreis entfernen (falls vorhanden)
-          Visualization.clearPlatformSearchRadius();
-          
-          // Radius für Suche (500m)
-          const searchRadius = 1000;
-          
-          // Radius-Kreis anzeigen
-          Visualization.drawPlatformSearchRadius(
-            contextMenuLatLng.lat,
-            contextMenuLatLng.lng,
-            searchRadius
-          );
-          
-          // Lade-Indikator anzeigen
-          Utils.showInfo('Suche nach ÖPNV-Haltestellen...', false);
-          
-          try {
-            // Haltestellen suchen
-            const platforms = await OverpassService.searchPublicTransportPlatforms(
-              contextMenuLatLng.lat,
-              contextMenuLatLng.lng,
-              searchRadius
-            );
-            
-            if (platforms.length === 0) {
-              Utils.showInfo('Keine ÖPNV-Haltestellen in der Nähe gefunden.', false);
-              // Kreis nach 3 Sekunden ausblenden
-              setTimeout(() => {
-                Visualization.clearPlatformSearchRadius();
-              }, 3000);
-              return;
-            }
-            
-            // Alte Haltestellen holen und neue hinzufügen (nicht ersetzen)
-            const oldPlatformLayers = State.getPlatformMarkers() || [];
-            const newPlatformLayers = Visualization.drawPlatforms(platforms);
-            
-            // Alle Haltestellen zusammenführen
-            const allPlatformLayers = [...oldPlatformLayers, ...newPlatformLayers];
-            State.setPlatformMarkers(allPlatformLayers);
-            
-            // Erfolgsmeldung
-            Utils.showInfo(`${platforms.length} Haltestelle${platforms.length !== 1 ? 'n' : ''} gefunden.`, false);
-            
-            // Radius-Kreis nach 3 Sekunden ausblenden
-            setTimeout(() => {
-              Visualization.clearPlatformSearchRadius();
-            }, 3000);
-            
-            // Karte zu den neuen Haltestellen zoomen (falls mehrere gefunden)
-            if (newPlatformLayers.length > 0) {
-              const bounds = [];
-              newPlatformLayers.forEach(layer => {
-                // Marker haben getLatLng(), Polygone haben getBounds()
-                if (layer.getLatLng) {
-                  bounds.push(layer.getLatLng());
-                } else if (layer.getBounds) {
-                  bounds.push(layer.getBounds().getCenter());
-                }
-              });
-              bounds.push(contextMenuLatLng); // Auch die Klick-Position einbeziehen
-              
-              if (bounds.length > 0) {
-                const latlngs = bounds.map(b => [b.lat, b.lng]);
-                this._map.fitBounds(latlngs, { padding: [50, 50], maxZoom: 16 });
-              }
-            }
-          } catch (error) {
-            console.error('Fehler bei Haltestellen-Suche:', error);
-            Utils.showError('Fehler beim Laden der ÖPNV-Haltestellen.', true);
-          }
+        const oldLayers = getMarkers() || [];
+        const newLayers = drawFn(places);
+        setMarkers([...oldLayers, ...newLayers]);
+        Utils.showInfo(`${places.length} ${entityLabel} gefunden.`, false);
+        setTimeout(() => clearRadiusFn(), 3000);
+        if (newLayers.length > 0) {
+          const bounds = newLayers.map(l => l.getLatLng ? l.getLatLng() : l.getBounds().getCenter()).concat([contextMenuLatLng]);
+          this._map.fitBounds(bounds.map(b => [b.lat, b.lng]), { padding: [50, 50], maxZoom: 16 });
         }
-      });
-    }
+      } catch (error) {
+        console.error('Fehler bei POI-Suche:', error);
+        Utils.showError(`Fehler beim Laden der ${entityLabel}.`, true);
+      }
+    };
+
+    const cafesBtn = Utils.getElement('#context-menu-cafes');
+    if (cafesBtn) cafesBtn.addEventListener('click', () => runPoiSearch('cafe', OverpassService.searchCafes.bind(OverpassService), 'Cafés', State.getCafeMarkers.bind(State), State.setCafeMarkers.bind(State), Visualization.drawCafes.bind(Visualization), Visualization.drawCafeSearchRadius.bind(Visualization), Visualization.clearCafeSearchRadius.bind(Visualization)));
+    const restaurantsBtn = Utils.getElement('#context-menu-restaurants');
+    if (restaurantsBtn) restaurantsBtn.addEventListener('click', () => runPoiSearch('restaurant', OverpassService.searchRestaurants.bind(OverpassService), 'Restaurants', State.getRestaurantMarkers.bind(State), State.setRestaurantMarkers.bind(State), Visualization.drawRestaurants.bind(Visualization), Visualization.drawRestaurantSearchRadius.bind(Visualization), Visualization.clearRestaurantSearchRadius.bind(Visualization)));
+    const barsBtn = Utils.getElement('#context-menu-bars');
+    if (barsBtn) barsBtn.addEventListener('click', () => runPoiSearch('bar', OverpassService.searchBars.bind(OverpassService), 'Bars/Kneipen', State.getBarMarkers.bind(State), State.setBarMarkers.bind(State), Visualization.drawBars.bind(Visualization), Visualization.drawBarSearchRadius.bind(Visualization), Visualization.clearBarSearchRadius.bind(Visualization)));
     
     // Menü schließen bei Klick außerhalb
     document.addEventListener('click', (e) => {
@@ -593,57 +464,80 @@ const MapRenderer = {
   },
   
   /**
-   * Löscht alle Layer außer Schul- und Haltestellen-Markern und Radius-Kreisen
-   * Verwendet selektive Entfernung statt clearLayers() für bessere Performance
+   * Löscht alle Layer außer POI-Markern (Cafés, Restaurants, Bars) und deren Radius-Kreisen
    */
   clearLayersExceptSchools() {
-    // Aktuellen Zielpunkt-Marker zurücksetzen, da er gelöscht wird
     State.setCurrentTargetMarker(null);
     if (!this._layerGroup) return;
-    
-    // Schul- und Haltestellen-Marker und Radius-Kreise behalten
-    const schoolLayers = State.getSchoolMarkers() || [];
-    const schoolSearchRadiusCircle = State.getSchoolSearchRadiusCircle();
-    const platformLayers = State.getPlatformMarkers() || [];
-    const platformSearchRadiusCircle = State.getPlatformSearchRadiusCircle();
-    
-    // Erstelle Set von Schul- und Haltestellen-Layer-Referenzen für schnellen Lookup
-    const schoolLayerSet = new Set(schoolLayers);
-    const platformLayerSet = new Set(platformLayers);
-    
-    // Alle anderen Layer entfernen
+    const cafeLayers = new Set(State.getCafeMarkers() || []);
+    const restaurantLayers = new Set(State.getRestaurantMarkers() || []);
+    const barLayers = new Set(State.getBarMarkers() || []);
+    const radiusCircles = [
+      State.getCafeSearchRadiusCircle(),
+      State.getRestaurantSearchRadiusCircle(),
+      State.getBarSearchRadiusCircle()
+    ];
     const layersToRemove = [];
     this._layerGroup.eachLayer(layer => {
-      // Prüfe auf mehrere Arten, ob es ein Schul- oder Haltestellen-Layer ist:
-      // 1. Direkte Referenz im Set
-      // 2. Custom-Property _isSchoolLayer oder _isPlatformLayer
-      const isSchoolLayer = schoolLayerSet.has(layer) || layer._isSchoolLayer === true;
-      const isPlatformLayer = platformLayerSet.has(layer) || layer._isPlatformLayer === true;
-      const isRadiusCircle = layer === schoolSearchRadiusCircle || layer === platformSearchRadiusCircle;
-      if (!isSchoolLayer && !isPlatformLayer && !isRadiusCircle) {
-        layersToRemove.push(layer);
-      }
+      const isPoi = cafeLayers.has(layer) || restaurantLayers.has(layer) || barLayers.has(layer) || layer._isPoiLayer === true;
+      const isRadius = radiusCircles.includes(layer);
+      if (!isPoi && !isRadius) layersToRemove.push(layer);
     });
-    
     layersToRemove.forEach(layer => this._layerGroup.removeLayer(layer));
   },
-  
+
   /**
-   * Löscht nur Routen (Polylines), aber nicht Schul- oder Haltestellen-Polygone
-   * Wichtig: L.Polygon erweitert L.Polyline, daher müssen wir _isSchoolLayer und _isPlatformLayer prüfen
+   * Löscht nur Routen und Isochrone-Polygone, nicht POI-Layer
    */
   clearRoutes() {
     if (!this._layerGroup) return;
-    
-    const polylinesToRemove = [];
+    const toRemove = [];
     this._layerGroup.eachLayer(layer => {
-      if (layer instanceof L.Polyline && !layer._isSchoolLayer && !layer._isPlatformLayer) {
-        polylinesToRemove.push(layer);
-      }
+      if (layer._isIsochroneLayer) toRemove.push(layer);
+      else if (layer instanceof L.Polyline && !layer._isPoiLayer) toRemove.push(layer);
     });
-    polylinesToRemove.forEach(layer => this._layerGroup.removeLayer(layer));
+    toRemove.forEach(layer => this._layerGroup.removeLayer(layer));
   },
-  
+
+  /**
+   * Entfernt nur die Isochrone-Polygone (z.B. vor Neuberechnung)
+   */
+  clearIsochrones() {
+    if (!this._layerGroup) return;
+    const layers = State.getIsochronePolygonLayers();
+    if (layers && layers.length) {
+      layers.forEach(layer => {
+        if (layer) this._layerGroup.removeLayer(layer);
+      });
+      State.setIsochronePolygonLayers([]);
+    }
+    const savedMarkers = State.getSavedIsochroneMarkers();
+    if (savedMarkers && savedMarkers.length) {
+      savedMarkers.forEach(m => { if (m) this._layerGroup.removeLayer(m); });
+      State.setSavedIsochroneMarkers([]);
+    }
+    const currentMarker = State.getCurrentTargetMarker();
+    if (currentMarker) {
+      this._layerGroup.removeLayer(currentMarker);
+      State.setCurrentTargetMarker(null);
+    }
+    State.setLastIsochroneResult(null);
+  },
+
+  /**
+   * Entfernt die Überlappungs-Polygone (Optimierung)
+   */
+  clearOverlap() {
+    if (!this._layerGroup) return;
+    const layers = State.getOverlapPolygonLayers();
+    if (layers && layers.length) {
+      layers.forEach(layer => {
+        if (layer) this._layerGroup.removeLayer(layer);
+      });
+      State.setOverlapPolygonLayers([]);
+    }
+  },
+
   /**
    * Entfernt eine Liste von Polylines aus dem LayerGroup
    * @param {Array} polylines - Array von Polyline-Objekten

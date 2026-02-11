@@ -1,193 +1,126 @@
-# Bulk-Router
+# Miso – Isochronen
 
-Eine interaktive Web-Anwendung zur Visualisierung von Routen mit mehreren Startpunkten zu einem Zielpunkt. Die Anwendung nutzt die GraphHopper Routing API, um Routen zu berechnen und bietet verschiedene Visualisierungs- und Analyseoptionen.
+Web-Anwendung zur Berechnung und Darstellung von **Isochronen** (Erreichbarkeitsflächen) auf einer Karte. Nutzt die GraphHopper Isochrone-API und OpenStreetMap (Overpass) für POI-Suchen.
 
 ## Features
 
-- 🗺️ **Interaktive Karte**: Klick auf die Karte, um einen Zielpunkt zu setzen
-- 🎯 **Mehrere Startpunkte**: Automatische Generierung von zufälligen Startpunkten in einem konfigurierbaren Radius
-- 🚴 **Verschiedene Profile**: Unterstützung für verschiedene Routing-Profile (Fahrrad, Auto, etc.)
-- 📊 **Aggregierte Darstellung**: Visualisierung von Routen mit Farbcodierung basierend auf der Anzahl der Routen pro Segment
-- 🎨 **Colormaps**: Verschiedene Farbschemata für die aggregierte Darstellung (viridis, plasma, inferno, magma)
-- 💾 **Zielpunkte merken**: Speichern und Verwalten mehrerer Zielpunkte mit ihren zugehörigen Routen
-- 📈 **Längenverteilung**: Verschiedene Verteilungsfunktionen für Startpunkte (lognormal, uniform, normal, etc.)
-- 🏫 **Schulen anzeigen**: Suche und Visualisierung von Schulen über OpenStreetMap (Rechtsklick-Menü)
-- 📤 **Export**: Export von Routen als GeoJSON
-- 🎛️ **Konfigurierbar**: Anpassbare Anzahl von Routen, Radius, Aggregierungsmethode und mehr
+- **Isochronen berechnen**: Klick auf die Karte setzt einen Startpunkt und berechnet die Erreichbarkeit (Fuß, Fahrrad, Auto) in konfigurierbaren Zeitstufen.
+- **Bucket-Größe & Zeitlimit**: Zeitintervalle z. B. 5 Min – Zeitlimit nur in diesen Schritten (5, 10, 15 … Min). Bucket-Größen: 1, 2, 3, 5 oder 10 Minuten.
+- **Startpunkte merken**: Mehrere Isochronen speichern, einzeln ein-/ausblenden, bearbeiten, verschieben.
+- **Farbe pro Startpunkt**: Jeder gespeicherte Startpunkt kann eine eigene Hauptfarbe haben (z. B. Blau, Rot, Grün); Darstellung innen kräftig, nach außen abnehmend.
+- **Überlappungsflächen**: Optional Anzeige der Flächen, die von allen sichtbaren Startpunkten innerhalb derselben Zeit erreichbar sind.
+- **POI-Suche (Overpass)**: Rechtsklick auf die Karte → Cafés, Restaurants oder Bars/Kneipen im Umkreis suchen und als Marker anzeigen.
+- **Hover & Klick-Lock**: Startpunkte auf der Karte und in der Liste beim Hover hervorheben; Klick „lockt“ einen Punkt (bleibt hervorgehoben bis Klick woanders).
+- **Button „Isochronen berechnen“**: Neuberechnung mit aktuellem Startpunkt und Einstellungen; während der Berechnung Anzeige „Berechne…“ (Button deaktiviert).
+- **Export**: Einzelne oder alle gespeicherten Isochronen als GeoJSON inkl. Metadaten exportieren.
+- **Adresssuche**: Geocoder zum Springen zu einer Adresse und sofortigen Isochrone um den gefundenen Punkt.
 
 ## Verwendung
 
-### Online (GitHub Pages)
-
-Die Anwendung ist verfügbar unter: [https://vizsim.github.io/routing_bulk/](https://vizsim.github.io/routing_bulk/)
-
-### Nutzung
-
-1. Klicke auf die Karte, um einen Zielpunkt zu setzen
-2. Die Anwendung generiert automatisch zufällige Startpunkte und berechnet Routen zum Zielpunkt
-3. Nutze die Konfigurationsoptionen, um die Darstellung anzupassen:
-   - **Profil**: Wähle zwischen verschiedenen Routing-Profilen
-   - **Anzahl Routen**: Anzahl der zu berechnenden Routen
-   - **Radius**: Radius für die Generierung von Startpunkten
-   - **Längenverteilung**: Verteilungsfunktion für Startpunkte
-   - **Aggregierte Darstellung**: Zeigt Routen mit Farbcodierung basierend auf der Anzahl
-   - **Zielpunkte merken**: Speichert mehrere Zielpunkte und ihre Routen
-4. **Schulen anzeigen**: Rechtsklick auf die Karte → "Schulen suchen" um Schulen im Umkreis anzuzeigen
+1. **Startpunkt setzen**: Einmal in die Karte klicken → Isochrone wird um den Klickpunkt berechnet (Standard: 10 Min, 5-Minuten-Buckets, Profil „Fuß“).
+2. **Einstellungen** (linkes Panel):
+   - **Bucket-Größe (Min.)**: 1, 2, 3, 5 oder 10 – legt die Zeitstufen und die Schrittweite für das Zeitlimit fest.
+   - **Zeitlimit (Min.)**: Nur Vielfache der Bucket-Größe (z. B. bei 5 Min: 5, 10, 15, …).
+   - **Profil**: Fuß, Fahrrad oder Auto.
+   - **Startpunkte merken**: An → weitere Klicks/Kalkulationen werden als zusätzliche Isochronen gespeichert (Liste mit S1, S2, …).
+3. **Gespeicherte Startpunkte**: In der Liste pro Eintrag: Auge (Sichtbarkeit), Stift (Bearbeiten: Zeitlimit, Bucket-Größe, Profil, **Farbe**), Löschen. Klick auf Zeile oder auf den Punkt auf der Karte hebt ihn hervor (Lock).
+4. **Rechtsklick-Menü** auf der Karte:
+   - **Isochrone hier berechnen**: Setzt Startpunkt an die Klickposition und startet die Berechnung.
+   - **OSM Objektabfrage**: Link zu Overpass Turbo o. Ä.
+   - **Cafés / Restaurants / Bars-Kneipen hier suchen**: Sucht im Umkreis (600 m) und zeigt Treffer als Marker.
+5. **Export**: Button „Export“ lädt die aktuelle bzw. alle gespeicherten Isochronen als GeoJSON herunter.
 
 ## Projektstruktur
 
 ```
-routing_bulk/
-├── index.html              # Haupt-HTML-Datei
-├── style.css              # Stylesheet
-├── README.md              # Diese Datei
-├── LICENSE                # MIT-Lizenz
-├── bulk_router_logo.svg   # Logo
+miso/
+├── index.html              # Einstiegsseite & Kontextmenüs
+├── style.css               # Layout & Komponenten
+├── README.md
+├── LICENSE                 # MIT
+├── bulk_router_logo.svg    # Logo
 │
-├── docs/                  # Dokumentation
-│   ├── AGGREGATION_PROBLEM.md      # Dokumentation zum Aggregierungs-Problem
-│   ├── AGGREGATION_PARAMETERS.md   # Dokumentation zu Aggregierungs-Parametern
-│   └── CODE_REVIEW_CHECKLIST.md    # Code Review & Refactoring Checkliste
+├── docs/                   # Zusätzliche Doku (teils aus Vorprojekt)
+│   └── ...
 │
 └── src/
-    ├── core/              # Kern-Module
-    │   ├── config.js      # Konfiguration
-    │   ├── state.js       # State-Management
-    │   ├── utils.js       # Utility-Funktionen
-    │   ├── events.js      # Event-Bus
-    │   └── compat.js      # Kompatibilitäts-Helper
+    ├── app.js              # App-Initialisierung, Event-Handler, Isochrone-Logik
     │
-    ├── services/          # Business-Logik
-    │   ├── route-service.js        # Route-Berechnung
-    │   ├── target-service.js       # Zielpunkt-Verwaltung
-    │   ├── export-service.js       # Export-Funktionalität
-    │   ├── aggregation-service.js  # Routen-Aggregierung
-    │   └── overpass-service.js     # Overpass API (OSM-Daten)
+    ├── core/
+    │   ├── config.js       # CONFIG (API-URLs, Isochrone-Defaults, …)
+    │   ├── state.js        # Globaler State (Karte, Isochronen, Marker, …)
+    │   ├── events.js       # Event-Bus
+    │   ├── utils.js        # Hilfsfunktionen
+    │   └── compat.js       # Kompatibilität
     │
-    ├── domain/            # Domain-Modelle & Utilities
-    │   ├── geo.js         # Geo-Funktionen
-    │   ├── distribution.js # Verteilungs-Funktionen
-    │   └── api.js         # API-Calls
+    ├── services/
+    │   ├── isochrone-service.js   # Aufruf GraphHopper Isochrone-API
+    │   ├── overpass-service.js    # Overpass: Cafés, Restaurants, Bars
+    │   ├── export-service.js     # GeoJSON-Export
+    │   ├── route-service.js      # (Legacy/Vorprojekt)
+    │   ├── target-service.js
+    │   ├── aggregation-service.js
+    │   └── population-service.js
     │
-    ├── visualization/     # Visualisierung
-    │   ├── visualization.js       # Visualisierungs-Orchestrierung
-    │   ├── map-renderer.js         # Karten-Rendering
-    │   ├── route-renderer.js       # Route-Rendering
-    │   ├── colormap-utils.js       # Colormap-Utilities
-    │   ├── histogram-renderer.js   # Histogramm-Rendering
-    │   ├── marker-manager.js       # Marker-Verwaltung
-    │   └── school-renderer.js      # Schul-Rendering
+    ├── domain/
+    │   ├── api.js          # fetchIsochrone, fetchRoute, …
+    │   ├── geo.js
+    │   └── distribution.js
     │
-    ├── ui/                # UI-Komponenten
-    │   ├── targets-list.js         # Zielpunkte-Liste
-    │   ├── config-helpers.js       # Config-UI-Helper
-    │   ├── distribution-selector.js # Verteilungs-Auswahl
-    │   ├── colormap-selector.js    # Colormap-Auswahl
-    │   └── route-warning.js        # Route-Warnung (Modal)
+    ├── visualization/
+    │   ├── visualization.js      # Orchestrierung (Startpunkte, Marker, …)
+    │   ├── map-renderer.js       # Karte, Kontextmenü, POI-Suche, clearLayers
+    │   ├── isochrone-renderer.js # Isochrone-Polygone (Farbe, Buckets)
+    │   ├── overlap-renderer.js   # Überlappungsflächen (Turf.js)
+    │   ├── poi-renderer.js       # Cafés, Restaurants, Bars (Marker)
+    │   ├── marker-manager.js
+    │   ├── route-renderer.js
+    │   ├── colormap-utils.js
+    │   └── histogram-renderer.js
     │
-    ├── handlers/          # Event-Handler
-    │   └── route-handler.js        # Route-Event-Handler
+    ├── ui/
+    │   ├── saved-isochrones-list.js  # Liste „Gespeicherte Startpunkte“, Edit-Modal, Farbwahl
+    │   ├── targets-list.js
+    │   ├── config-helpers.js
+    │   ├── distribution-selector.js
+    │   ├── colormap-selector.js
+    │   └── route-warning.js
     │
-    ├── utils/             # Utilities
-    │   └── geocoder.js    # Geocoding (Adresssuche)
+    ├── handlers/
+    │   └── route-handler.js
     │
-    └── app.js             # Haupt-Orchestrierung
+    └── utils/
+        └── geocoder.js     # Adresssuche
 ```
 
 ## Technologie-Stack
 
-- **Leaflet.js**: Karten-Visualisierung
-- **GraphHopper API**: Routing-Berechnung
-- **Vanilla JavaScript**: Keine externen Frameworks
-- **Event-Bus Pattern**: Lose Kopplung zwischen Modulen
+- **Leaflet.js**: Karte, Marker, Polygone, Popups
+- **GraphHopper API**: Isochrone-Endpunkt (Zeit-Erreichbarkeit)
+- **Overpass API**: POI-Abfragen (Cafés, Restaurants, Bars/Kneipen)
+- **Turf.js**: Überlappungsflächen (Schnittmengen)
+- **Vanilla JavaScript**: Kein Framework, modulare Skripte
+- **Event-Bus**: Lose Kopplung (z. B. `ISOCHRONE_CALCULATED`, `ISOCHRONE_CALCULATING`)
 
 ## Konfiguration
 
-Die Hauptkonfiguration befindet sich in `src/core/config.js`:
+Wichtige Einträge in `src/core/config.js`:
 
 ```javascript
-const CONFIG = {
-  //GH_ROUTE_URL: "https://ghroute.duckdns.org/route",
-  GH_ROUTE_URL: "https://ghroute.vizsim.de/route",
-  PROFILE: "bike",
-  N: 10,
-  RADIUS_M: 2000,
-  // ...
+CONFIG = {
+  GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone",  // GraphHopper Isochrone-API
+  ISOCHRONE_TIME_LIMIT: 600,        // Sekunden (wird aus UI abgeleitet)
+  ISOCHRONE_BUCKET_SIZE_MIN: 5,     // 1, 2, 3, 5 oder 10 Minuten
+  PROFILE: "foot",                  // "foot" | "bike" | "car"
+  REMEMBER_ISOCHRONE_STARTS: false, // Startpunkte merken
+  OPTIMIZATION_MODE: "none",       // "none" | "overlap" | "system_optimal"
+  OVERPASS_SERVERS: [ "https://overpass-api.de/api/", ... ], // Fallback-Liste
+  MAP_CENTER: [52.6858, 14.10078],
+  MAP_ZOOM: 13,
+  // …
 };
 ```
 
-## Aggregierung
-
-Die Anwendung unterstützt zwei Aggregierungsmethoden:
-
-1. **Simple**: Schnelle Aggregierung basierend auf normalisierten Koordinaten
-2. **Lazy Overlap Splitting**: Präzisere Aggregierung mit Overlap-Erkennung
-
-Weitere Details zur Aggregierung finden sich in [`docs/AGGREGATION_PARAMETERS.md`](docs/AGGREGATION_PARAMETERS.md) und [`docs/AGGREGATION_PROBLEM.md`](docs/AGGREGATION_PROBLEM.md).
-
-## Entwicklung
-
-### Architektur
-
-Die Anwendung folgt einer modularen Architektur mit klarer Trennung von Concerns:
-
-- **Core**: Kern-Funktionalität (Config, State, Events, Utils)
-- **Services**: Business-Logik (Route-Berechnung, Zielpunkt-Verwaltung, Export, Aggregation)
-- **Domain**: Domain-Modelle und Utilities (Geo-Funktionen, Verteilungen, API-Calls)
-- **Visualization**: Visualisierungs-Logik (modular aufgeteilt in spezialisierte Renderer)
-  - `visualization.js`: Orchestrierung und Delegation
-  - `map-renderer.js`: Karten-Rendering
-  - `route-renderer.js`: Route-Rendering
-  - `colormap-utils.js`: Colormap-Berechnungen
-  - `histogram-renderer.js`: Histogramm-Visualisierung
-  - `marker-manager.js`: Marker-Verwaltung
-  - `school-renderer.js`: Schul-Visualisierung
-- **UI**: UI-Komponenten (modulare, wiederverwendbare Komponenten)
-- **Handlers**: Event-Handler für lose Kopplung zwischen Modulen
-- **Utils**: Zusätzliche Utilities (Geocoding)
-
-Die Kommunikation zwischen Modulen erfolgt über einen Event-Bus (`EventBus`), was eine lose Kopplung und einfache Erweiterbarkeit ermöglicht.
-
-
-
-## Ausblick
-
-### Modellierung von Schulwegen
-
-Ein geplanter Use Case für die Anwendung ist die Modellierung von Schulwegen. Hierfür werden zusätzlich zu den Routenberechnungen weitere Datenquellen benötigt:
-
-1. **Nachfrage (Schülerinnen und Schüler)**: 
-   - **Zensus 2022 Daten**: 100x100m Raster mit Einwohnerzahlen und "Anteil unter 18 Jähriger"
-   - Diese Daten ermöglichen die Abschätzung der Anzahl von Schülerinnen und Schülern pro Rasterzelle
-   - siehe https://atlas.zensus2022.de/
-
-2. **Bushaltestellen und Fußverkehr**:
-   - Bushaltestellen in der Nähe von Schulen können als zusätzliche Startpunkte für Fußwege dienen
-   - Von diesen Haltestellen aus können Fußwege zu den Schulen modelliert werden
-   - Dies ermöglicht eine realistischere Darstellung von Schulwegen, die auch öffentliche Verkehrsmittel einbezieht
-   - **Datenquelle**: Bushaltestellen sind in OpenStreetMap (OSM) verfügbar und können ähnlich wie Schulen über die Overpass API abgerufen werden
-
-3. **Einzugsbereiche der Schulen**:
-   - Die Einzugsbereiche definieren, welche Wohnorte welcher Schule zugeordnet sind
-   - Die Datenlage ist für verschiedene Bezirke in Berlin sehr unterschiedlich
-   - Stand jetzt wurden nur Daten für Grundschulen gefunden
-
-#### Verfügbare Datenquellen für Einzugsbereiche (von Grundschulen)
-
-| Bezirk | Format | Beschreibung | Link |
-|--------|--------|--------------|------|
-| Treptow-Köpenick | PDF Karte | Einschulungsbereiche als PDF-Karte verfügbar | [Link](https://www.berlin.de/ba-treptow-koepenick/politik-und-verwaltung/aemter/schul-und-sportamt/schule/artikel.841674.php) |
-| Neukölln | Digital(?) | Einschulungsbereiche in digitaler Form verfügbar, aber nicht öffentlich nutzbar (kein echtes WMS) | [Link](https://www.berlin.de/ba-neukoelln/politik-und-verwaltung/aemter/schul-und-sportamt/schulamt/artikel.1131196.php) |
-| Steglitz-Zehlendorf | PDF mit Karte und Adressen | Einschulungsbereiche als PDF mit Karte und Adressliste | [Link](https://www.berlin.de/ba-steglitz-zehlendorf/politik-und-verwaltung/aemter/schul-und-sportamt/schulen/artikel.86435.php) |
-| Mitte | PDF mit Karte und Adressliste | Einschulungsbereiche als PDF mit Karte und Adressliste | [Link](https://www.berlin.de/ba-mitte/politik-und-verwaltung/aemter/schul-und-sportamt/schule/artikel.1419606.php) |
-
-Die Integration dieser Datenquellen würde es ermöglichen:
-- synthetische Startpunkte basierend auf tatsächlichen Wohnorten von Schülerinnen und Schülern zu generieren
-- wahrscheinliche Schulwege zu visualisieren und zu analysieren
-- zusätzliche Fußwege von Bushaltestellen zu Schulen zu modellieren und zu visualisieren
 
 ## Lizenz
-
-Dieses Projekt steht unter der MIT-Lizenz. Siehe [LICENSE](LICENSE) für Details.
-
 

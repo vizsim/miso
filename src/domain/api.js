@@ -62,6 +62,39 @@ const API = {
     const path = ghResponse.paths?.[0];
     if (path == null || typeof path.distance !== 'number') return null;
     return path.distance;
+  },
+
+  /**
+   * Isochrone vom GraphHopper-Server abfragen (GET).
+   * @param {[number, number]} point - [lat, lng]
+   * @param {Object} options - { time_limit (Sekunden), buckets, profile, reverse_flow }
+   * @returns {Promise<Object>} - Response mit polygons (GeoJSON FeatureCollection)
+   */
+  async fetchIsochrone(point, options = {}) {
+    const timeLimit = options.time_limit ?? CONFIG.ISOCHRONE_TIME_LIMIT;
+    const buckets = options.buckets ?? CONFIG.ISOCHRONE_BUCKETS;
+    const profile = options.profile ?? CONFIG.PROFILE;
+    const reverseFlow = options.reverse_flow !== undefined ? options.reverse_flow : false;
+
+    const pointStr = `${point[0]},${point[1]}`;
+    const params = new URLSearchParams({
+      point: pointStr,
+      time_limit: String(timeLimit),
+      distance_limit: "0",
+      profile: profile,
+      buckets: String(buckets),
+      reverse_flow: String(reverseFlow)
+    });
+
+    const url = `${CONFIG.GH_ISOCHRONE_URL}?${params}`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`Isochrone-Fehler ${res.status}: ${txt.slice(0, 200)}`);
+    }
+
+    return res.json();
   }
 };
 

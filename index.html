@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Bulk-Router</title>
-  <link rel="icon" type="image/svg+xml" href="bulk_router_logo.svg" />
+  <title>miso – where isochrones meet</title>
+  <link rel="icon" type="image/svg+xml" href="miso_logo.svg" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -13,8 +13,8 @@
     <div class="panel-header">
       <div style="display: flex; align-items: center; justify-content: space-between;">
         <h3 style="display: flex; align-items: center; gap: 10px; margin: 0;">
-          <img src="bulk_router_logo.svg" alt="Bulk-Router Logo" style="width: 32px; height: 32px;" />
-          Bulk-Router
+          <img src="miso_logo.svg" alt="Logo" style="width: 32px; height: 32px;" />
+          miso - <br>where isochrones meet
         </h3>
         <button class="btn-close" id="collapse-panel" title="Ein-/Ausklappen">
           <svg width="16" height="16" viewBox="-20 -20 490 450" fill="currentColor">
@@ -26,10 +26,10 @@
       </div>
       <div id="no-target-hint" class="panel-hint panel-hint--no-target" role="status" aria-live="polite">
         <p class="panel-hint-main">
-          <strong>Zielpunkt setzen</strong> Klick in die Karte → Es werden automatisch Startpunkte gewählt und Routen zum Ziel erstellt.
+          <strong>Startpunkt für Isochrone setzen</strong> Klick in die Karte → Es wird eine Erreichbarkeits-Isochrone vom GraphHopper-Server berechnet.
         </p>
         <p class="panel-hint-secondary">
-          Im Rechtsklick-Menü gibt es außerdem: Schulen suchen, ÖPNV-Haltestellen suchen.
+          Im Rechtsklick-Menü: Cafés, Restaurants oder Bars/Kneipen suchen.
         </p>
       </div>
     </div>
@@ -38,16 +38,55 @@
         <h4 id="block-einstellungen-heading" class="config-block-title">Einstellungen</h4>
         <div class="config-group">
           <div class="switch-toggle">
-            <label for="config-remember-targets">
-              <input type="checkbox" id="config-remember-targets" />
+            <label for="config-remember-isochrone-starts">
+              <input type="checkbox" id="config-remember-isochrone-starts" />
               <span class="switch-slider"></span>
-              <span class="switch-text">Zielpunkte merken</span>
+              <span class="switch-text">Startpunkte merken</span>
             </label>
           </div>
         </div>
-        <div class="config-group" id="targets-list-group" style="display: none;">
-          <label>Zielpunkte:</label>
-          <div id="targets-list" class="targets-list"></div>
+        <div class="config-group" id="saved-isochrones-list-group" style="display: none;">
+          <label>Gespeicherte Startpunkte:</label>
+          <div id="saved-isochrones-list" class="targets-list"></div>
+          <button type="button" id="saved-isochrones-clear-all" class="export-button" style="margin-top: 6px;">Alle löschen</button>
+        </div>
+        <div class="config-group" id="isochrone-params-group">
+          <div class="config-field-half" style="margin-bottom: 8px;">
+            <label for="config-isochrone-bucket-size">Bucket-Größe (Min.):</label>
+            <select id="config-isochrone-bucket-size">
+              <option value="1">1 min</option>
+              <option value="2">2 min</option>
+              <option value="3">3 min</option>
+              <option value="5" selected>5 min</option>
+              <option value="10">10 min</option>
+            </select>
+          </div>
+          <div class="config-field-half">
+            <label for="config-isochrone-time">Zeitlimit (Min.):</label>
+            <input type="number" id="config-isochrone-time" min="5" max="120" step="5" value="10" />
+          </div>
+          <div class="config-group" style="margin-top: 10px;">
+            <div class="switch-toggle switch-toggle-small" style="margin-bottom: 6px;">
+              <label for="config-isochrone-hex-snap">
+                <input type="checkbox" id="config-isochrone-hex-snap" />
+                <span class="switch-slider"></span>
+                <span class="switch-text">Isochronen auf Hex-Raster vereinfachen</span>
+              </label>
+            </div>
+            <label for="config-isochrone-hex-size">Hex-Detailgrad</label>
+            <select id="config-isochrone-hex-size">
+              <option value="100">Sehr fein (100 m)</option>
+              <option value="250" selected>Fein (250 m)</option>
+              <option value="500">Mittel (500 m)</option>
+              <option value="1000">Grob (1000 m)</option>
+            </select>
+            <p class="config-hint" style="font-size: 11px; color: #666; margin-top: 4px;">
+              Hilft v. a. bei Städten: weniger Polygon-Punkte → Turf-Operationen schneller. Kleinere Hexe = mehr Detail, aber langsamer.
+            </p>
+          </div>
+        </div>
+        <div class="config-group">
+          <button type="button" id="btn-calculate-isochrone" class="btn-calculate-isochrone">Isochronen berechnen</button>
         </div>
         <div class="config-group">
           <label>Profil:</label>
@@ -82,165 +121,51 @@
           </button>
         </div>
         </div>
-        <div class="config-group config-group-inline">
-          <div class="config-field-half">
-            <label for="config-n">Anzahl Routen:</label>
-            <input type="number" id="config-n" min="1" max="1000" value="10" />
+      </section>
+
+      <section class="config-block" aria-labelledby="block-optimierung-heading">
+        <h4 id="block-optimierung-heading" class="config-block-title">Optimierung</h4>
+        <div class="config-group" id="optimization-overlap-group" style="display: none;">
+          <label for="config-optimization-mode" class="config-label">Modus</label>
+          <select id="config-optimization-mode" class="config-select" aria-describedby="optimization-hint">
+            <option value="none">Keine</option>
+            <option value="overlap">Von allen in gleicher Zeit erreichbar</option>
+            <option value="system_optimal">Systemoptimal (Einzugsgebiete)</option>
+          </select>
+          <p id="optimization-hint" class="config-hint" style="font-size: 11px; color: #666; margin-top: 4px;">
+            <strong>Überlappung:</strong> Flächen, die von allen Startpunkten in derselben Zeit erreichbar sind.
+            <strong>Systemoptimal:</strong> Jeder Ort wird dem nächsten Start zugeordnet – geringste Gesamt-Reisezeit.
+          </p>
+
+          <div id="optimization-advanced-controls" style="display:none; margin-top: 10px;">
+            <div class="switch-toggle switch-toggle-small" style="margin-bottom: 8px;">
+              <label for="config-opt-link-budgets">
+                <input type="checkbox" id="config-opt-link-budgets" />
+                <span class="switch-slider"></span>
+                <span class="switch-text">Zeitbudget für alle koppeln</span>
+              </label>
+            </div>
+
+            <label for="config-opt-global-budget">Zeitbudget (max)</label>
+            <input type="range" id="config-opt-global-budget" min="0" max="0" step="1" />
+            <div id="config-opt-global-budget-label" class="config-hint" style="font-size: 11px; color: #666; margin-top: 4px;"></div>
+
+            <div id="optimization-starts-container" style="margin-top: 10px;"></div>
+
+            <div style="display:flex; gap: 8px; margin-top: 10px;">
+              <button type="button" id="optimization-enforce-overlap" class="export-button" style="flex: 1;">Overlap erzwingen</button>
+              <button type="button" id="optimization-add-buckets" class="export-button" style="flex: 1;">Mehr Buckets (+1) berechnen</button>
+              <button type="button" id="optimization-reset-budgets" class="export-button" style="flex: 1;">Reset</button>
+            </div>
+            <div id="optimization-status" class="config-hint" style="font-size: 11px; color: #666; margin-top: 6px;"></div>
           </div>
-          <div class="config-field-half">
-            <label for="config-radius">Radius (km):</label>
-            <input type="number" id="config-radius" min="0.1" max="10" step="0.1" value="2" />
-          </div>
-        </div>
-        <div class="config-group">
-          <label>Längenverteilung (Beeline):</label>
-          <div class="distribution-buttons">
-          <button class="dist-btn active" data-dist="lognormal" title="Lognormalverteilung">
-            <svg width="20" height="12" viewBox="0 0 100 60" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M 5 55 C 7 15, 13 5, 19 18 C 28 35, 43 45, 68 52 C 83 55, 95 56, 98 56"></path>
-            </svg>
-          </button>
-          <button class="dist-btn" data-dist="uniform" title="Gleichmäßig">
-            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <line x1="2" y1="6" x2="18" y2="6"></line>
-            </svg>
-          </button>
-          <button class="dist-btn" data-dist="near" title="Mehr nah">
-            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <line x1="2" y1="2" x2="18" y2="10"></line>
-            </svg>
-          </button>
-          <button class="dist-btn" data-dist="far" title="Mehr fern">
-            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <line x1="2" y1="10" x2="18" y2="2"></line>
-            </svg>
-          </button>
-          <button class="dist-btn" data-dist="normal" title="Normal (Glockenkurve)">
-            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M2 10 Q10 2 18 10"></path>
-            </svg>
-          </button>
-        </div>
-        <div class="histogram-mode-row">
-          <span class="histogram-mode-label">Histogramm:</span>
-          <div class="histogram-mode-buttons">
-            <button type="button" class="histogram-mode-btn active" data-mode="beeline" title="Luftlinie">Beeline</button>
-            <button type="button" class="histogram-mode-btn" data-mode="route" title="Routenlänge">Routenlänge</button>
-          </div>
-        </div>
-        <canvas id="distance-histogram" width="250" height="120"></canvas>
         </div>
       </section>
 
       <section class="config-block" aria-labelledby="block-darstellung-heading">
-        <h4 id="block-darstellung-heading" class="config-block-title">Darstellung & Export</h4>
-        <div class="config-group" id="population-weight-group" style="display: none;">
-        <span class="config-group-label-row">
-          <label class="config-group-label">Einwohner (Zensus 2022)</label>
-          <span class="info-hint" role="img" aria-label="Quellenangabe">
-            <span class="info-hint-icon" aria-hidden="true">ⓘ</span>
-            <span class="info-hint-text">Die Nutzung ist zulässig unter den Bedingungen der Datenlizenz Deutschland – Namensnennung – Version 2.0. Namensnennung: © Statistisches Bundesamt (Destatis).</span>
-          </span>
-        </span>
-        <div class="switch-toggle switch-toggle-small">
-          <label for="config-population-weight-starts">
-            <input type="checkbox" id="config-population-weight-starts" checked />
-            <span class="switch-slider"></span>
-            <span class="switch-text">Startpunkte nach Einwohner gewichten</span>
-          </label>
-        </div>
-        <div class="switch-toggle switch-toggle-small">
-          <label for="config-population-layer-visible">
-            <input type="checkbox" id="config-population-layer-visible" />
-            <span class="switch-slider"></span>
-            <span class="switch-text">Einwohnerlayer anzeigen</span>
-          </label>
-        </div>
-        <div id="population-legend" class="population-legend" aria-hidden="true"></div>
-        </div>
-        <div class="config-group config-group-with-border">
-          <div class="switch-toggle">
-            <label for="config-aggregated">
-              <input type="checkbox" id="config-aggregated" />
-              <span class="switch-slider"></span>
-              <span class="switch-text">Aggregierte Darstellung</span>
-            </label>
-          </div>
-        </div>
-        <div class="config-group" id="aggregation-method-group" style="display: none;">
-          <label for="config-aggregation-method">Aggregierungs-Methode:</label>
-          <select id="config-aggregation-method">
-            <option value="simple">Einfach (schnell)</option>
-            <option value="lazyOverlap">Lazy Overlap Splitting (präzise)</option>
-          </select>
-        </div>
-        <div class="config-group" id="hide-start-points-group" style="display: none;">
-          <div class="switch-toggle switch-toggle-small">
-            <label for="config-hide-start-points">
-              <input type="checkbox" id="config-hide-start-points" />
-              <span class="switch-slider"></span>
-              <svg class="switch-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                <!-- Glow-Effekt (äußerer Ring, entspricht box-shadow) -->
-                <circle cx="8" cy="8" r="5.5" fill="#666" opacity="0.5" />
-                <!-- Hauptkreis mit grauer Farbe (entspricht background-color) -->
-                <circle cx="8" cy="8" r="4" fill="#666" />
-                <!-- Weißer Rand (entspricht border) -->
-                <circle cx="8" cy="8" r="3.25" fill="none" stroke="white" stroke-width="1.5" />
-              </svg>
-              <span class="switch-text">Startpunkte ausblenden</span>
-            </label>
-          </div>
-        </div>
-        <div class="config-group" id="hide-target-points-group" style="display: none;">
-          <div class="switch-toggle switch-toggle-small">
-            <label for="config-hide-target-points">
-              <input type="checkbox" id="config-hide-target-points" />
-              <span class="switch-slider"></span>
-              <svg class="switch-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                <!-- Zielpunkt-Icon (Pin-Form, wie auf der Karte - Tropfenform) -->
-                <path d="M8 1.33c-2.76 0-5 2.24-5 5 0 4 5 5.67 5 5.67s5-1.67 5-5.67c0-2.76-2.24-5-5-5z" fill="#666" stroke="white" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <!-- Inneres Symbol (Ziel-Symbol wie auf der Karte - Gebäude) -->
-                <g transform="translate(8, 5.5) scale(0.25)">
-                  <!-- Vertikale Linie -->
-                  <line x1="0" y1="24" x2="0" y2="0" stroke="white" stroke-width="3" stroke-linecap="round"/>
-                  <!-- Äußeres Rechteck -->
-                  <polyline points="-2,0 18,0 18,16 -2,16" stroke="white" stroke-width="1.5" fill="none"/>
-                  <!-- Linkes gefülltes Rechteck -->
-                  <rect x="-2" y="0" width="8" height="6" fill="white"/>
-                  <!-- Rechtes gefülltes Rechteck -->
-                  <rect x="12" y="8" width="6" height="6" fill="white"/>
-                </g>
-              </svg>
-              <span class="switch-text">Zielpunkte ausblenden</span>
-            </label>
-          </div>
-        </div>
-        <div id="legend" class="legend" style="display: none;">
-        <div class="legend-title">Anzahl Routen</div>
-        <div class="legend-gradient">
-          <div class="legend-gradient-bar" id="legend-gradient-bar"></div>
-        </div>
-        <div class="legend-labels">
-          <span>Wenig</span>
-          <span>Viel</span>
-        </div>
-        <div class="colormap-preview-container">
-          <div class="colormap-preview" data-colormap="viridis_r" title="viridis_r">
-            <div class="colormap-preview-bar" id="colormap-preview-viridis_r"></div>
-          </div>
-          <div class="colormap-preview" data-colormap="plasma_r" title="plasma_r">
-            <div class="colormap-preview-bar" id="colormap-preview-plasma_r"></div>
-          </div>
-          <div class="colormap-preview" data-colormap="inferno_r" title="inferno_r">
-            <div class="colormap-preview-bar" id="colormap-preview-inferno_r"></div>
-          </div>
-          <div class="colormap-preview" data-colormap="magma_r" title="magma_r">
-            <div class="colormap-preview-bar" id="colormap-preview-magma_r"></div>
-          </div>
-        </div>
-        </div>
+        <h4 id="block-darstellung-heading" class="config-block-title">Export</h4>
         <div class="config-group config-group-export">
-          <button id="export-btn" class="export-button" disabled>Routen als GeoJSON exportieren</button>
+          <button id="export-btn" class="export-button" disabled>Isochrone als GeoJSON exportieren</button>
         </div>
       </section>
 
@@ -271,56 +196,34 @@
   <!-- Kontextmenü für Karte -->
   <div id="context-menu" class="context-menu" style="display: none;">
     <div class="context-menu-item" id="context-menu-set-end">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="#ef4444"></path>
-        <g transform="translate(12, 10) scale(0.4) translate(-16, -16)">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="white" stroke-miterlimit="10">
-            <line x1="6" y1="28" x2="6" y2="5" stroke="white" stroke-width="3" stroke-linecap="round"></line>
-            <polyline points="6,5 26,5 26,19 6,19" stroke="white" stroke-width="1.5"></polyline>
-            <rect x="6" y="5" width="10" height="7" fill="white"></rect>
-            <rect x="16" y="12" width="10" height="7" fill="white"></rect>
-          </svg>
-        </g>
-      </svg>
-      <span>Zielpunkt setzen</span>
+      <span class="context-menu-icon-wrap">
+        <span class="context-menu-dot" title="Isochrone hier berechnen"></span>
+      </span>
+      <span class="context-menu-label">Isochrone hier berechnen</span>
     </div>
     <div class="context-menu-separator"></div>
     <a class="context-menu-item" id="context-menu-osm-query" target="_blank" rel="noopener noreferrer" href="#">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="16" x2="12" y2="12"></line>
-        <line x1="12" y1="8" x2="12.01" y2="8"></line>
-      </svg>
-      <span>OSM Objektabfrage</span>
+      <span class="context-menu-icon-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+      </span>
+      <span class="context-menu-label">OSM Objektabfrage</span>
     </a>
     <div class="context-menu-separator"></div>
-    <div class="context-menu-item" id="context-menu-schools">
-      <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M463.313,346.29c-0.758-2.274-2.224-4.747-4.085-6.608l-83.683-83.682l131.503-131.502c6.603-6.603,6.603-17.307,0-23.909
-          L411.411,4.952C408.241,1.782,403.941,0,399.456,0s-8.785,1.782-11.954,4.952
-          c-4.677,4.677-123.793,123.793-131.502,131.502l-71.724-71.725c-0.001-0.001-0.002-0.002-0.003-0.005
-          c-0.001-0.002-0.002-0.002-0.005-0.003l-47.815-47.815c-19.819-19.821-51.904-19.826-71.727,0L16.908,64.726
-          c-19.776,19.775-19.776,51.952,0,71.727l119.547,119.547C134.263,258.19,16.761,375.691,4.952,387.5
-          c-6.603,6.603-6.603,17.307,0,23.909l95.637,95.639c3.171,3.17,7.47,4.952,11.954,4.952s8.785-1.782,11.954-4.952
-          l131.502-131.502l83.682,83.682c1.853,1.853,4.317,3.322,6.608,4.085l143.456,47.818c6.058,2.02,12.762,0.455,17.301-4.085
-          c4.529-4.528,6.11-11.226,4.085-17.301L463.313,346.29z M303.82,136.453l23.909,23.91c3.301,3.301,7.628,4.952,11.954,4.952
-          s8.654-1.651,11.954-4.952c6.603-6.601,6.603-17.307,0-23.909l-23.909-23.909l23.909-23.909l23.91,23.909
-          c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.65,11.954-4.952c6.603-6.603,6.603-17.307,0-23.909l-23.909-23.909
-          l23.909-23.909l71.728,71.728L351.638,232.09l-71.728-71.728L303.82,136.453z M423.366,351.637l-23.91,23.91L148.408,124.499
-          l23.909-23.909L423.366,351.637z M76.681,148.408l-35.864-35.864c-6.591-6.592-6.591-17.318,0-23.909l47.819-47.819
-          c6.607-6.606,17.301-6.609,23.909,0l35.864,35.864C145.133,79.956,79.944,145.145,76.681,148.408z M112.545,471.183l-71.728-71.728
-          l23.91-23.909l23.909,23.91c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.651,11.954-4.952c6.603-6.601,6.603-17.307,0-23.909
-          l-23.908-23.91l23.909-23.909l23.91,23.909c3.301,3.301,7.628,4.952,11.954,4.952c4.326,0,8.654-1.65,11.954-4.952
-          c6.603-6.603,6.603-17.307,0-23.909l-23.91-23.909l23.909-23.909l71.728,71.728L112.545,471.183z M351.637,423.366L100.59,172.317
-          l23.909-23.909l251.048,251.048L351.637,423.366z M382.935,439.886l56.952-56.952l28.475,85.427L382.935,439.886z"/>
-      </svg>
-      <span>Schulen hier suchen</span>
+    <div class="context-menu-item" id="context-menu-cafes">
+      <span class="context-menu-icon-wrap context-menu-emoji">☕</span>
+      <span class="context-menu-label">Cafés hier suchen</span>
     </div>
-    <div class="context-menu-item" id="context-menu-platforms">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 16c0 .88.39 1.67 1 2.22V20a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
-      </svg>
-      <span>ÖPNV-Haltestellen hier suchen</span>
+    <div class="context-menu-item" id="context-menu-restaurants">
+      <span class="context-menu-icon-wrap context-menu-emoji">🍽</span>
+      <span class="context-menu-label">Restaurants hier suchen</span>
+    </div>
+    <div class="context-menu-item" id="context-menu-bars">
+      <span class="context-menu-icon-wrap context-menu-emoji">🍺</span>
+      <span class="context-menu-label">Bars/Kneipen hier suchen</span>
     </div>
   </div>
 
@@ -358,7 +261,69 @@
     </div>
   </div>
 
+  <!-- Startpunkt bearbeiten (Zeitlimit, Buckets, Profil) -->
+  <div id="edit-isochrone-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="edit-isochrone-modal-title">Startpunkt bearbeiten</h3>
+      </div>
+      <div class="modal-body">
+        <div class="config-group" style="margin-bottom: 10px;">
+          <label for="edit-isochrone-bucket-size">Bucket-Größe (Min.):</label>
+          <select id="edit-isochrone-bucket-size">
+            <option value="1">1 min</option>
+            <option value="2">2 min</option>
+            <option value="3">3 min</option>
+            <option value="5" selected>5 min</option>
+            <option value="10">10 min</option>
+          </select>
+        </div>
+        <div class="config-group" style="margin-bottom: 10px;">
+          <label for="edit-isochrone-time">Zeitlimit (Min.):</label>
+          <input type="number" id="edit-isochrone-time" min="5" max="120" step="5" value="10" />
+        </div>
+        <div class="config-group" style="margin-bottom: 10px;">
+          <label for="edit-isochrone-color">Hauptfarbe:</label>
+          <input type="color" id="edit-isochrone-color" value="#3388ff" title="Farbe der Isochrone für diesen Startpunkt" style="width: 100%; height: 36px; padding: 2px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px;" />
+        </div>
+        <div class="config-group">
+          <label>Profil:</label>
+          <div class="profile-buttons" id="edit-isochrone-profile-btns">
+            <button type="button" class="profile-btn edit-profile-btn" data-profile="foot" title="Fußgänger">
+              <svg width="20" height="20" viewBox="0 0 59.351 59.351" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16.113,51.517c-0.918,1.566-0.868,3.498,0.705,4.66c1.346,0.992,3.742,0.863,4.662-0.704c1.902-3.244,5.351-5.687,5.351-5.687s-1.27-2.798-1.871-8.041C24.959,41.746,18.277,47.824,16.113,51.517z"/>
+                <path d="M43.244,23.299c-3.903-3.474-8.09-6.591-12.672-9.098c-0.493-0.373-1.057-0.665-1.652-0.86c-0.398-0.161-0.789-0.239-1.165-0.25c-0.629-0.072-1.259-0.04-1.836,0.115c-1.523,0.408-2.551,1.34-3.136,2.526c-2.823,3.297-5.181,6.88-7.297,10.666c-2.101,3.756,3.657,7.117,5.756,3.364c0.656-1.175,1.332-2.333,2.038-3.469c0.609,4.104,1.217,8.208,1.824,12.311c0.123,0.832,0.519,1.548,1.072,2.13c0.884,5.842,2.507,11.605,5.066,16.907c1.867,3.87,7.614,0.487,5.756-3.365c-1.912-3.961-3.19-8.346-3.977-12.769c1.73-1.205,2.357-3.375,2.033-5.569c-0.602-4.052-1.201-8.106-1.803-12.159c1.822,1.315,3.58,2.725,5.275,4.234C41.733,30.858,46.464,26.161,43.244,23.299z"/>
+                <circle cx="27.254" cy="5.808" r="5.808"/>
+              </svg>
+            </button>
+            <button type="button" class="profile-btn edit-profile-btn" data-profile="bike" title="Fahrrad">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="5.5" cy="17.5" r="3.5"></circle>
+                <circle cx="18.5" cy="17.5" r="3.5"></circle>
+                <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"></path>
+                <path d="M12 17.5V14l-3-3 4-3 2 3h3"></path>
+              </svg>
+            </button>
+            <button type="button" class="profile-btn edit-profile-btn" data-profile="car" title="Auto">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19.78 9.44L17.94 4.44C17.8238 4.09604 17.6036 3.79671 17.3097 3.5835C17.0159 3.37029 16.663 3.25374 16.3 3.25H7.7C7.3418 3.2508 6.99248 3.36151 6.6992 3.56716C6.40592 3.77281 6.18281 4.06351 6.06 4.4L4.22 9.4C3.92473 9.54131 3.67473 9.76216 3.49808 10.0377C3.32142 10.3133 3.22512 10.6327 3.22 10.96V15.46C3.21426 15.7525 3.28279 16.0417 3.41921 16.3006C3.55562 16.5594 3.75544 16.7794 4 16.94V17V19C4 19.2652 4.10536 19.5196 4.29289 19.7071C4.48043 19.8946 4.73478 20 5 20H6C6.26522 20 6.51957 19.8946 6.70711 19.7071C6.89464 19.5196 7 19.2652 7 19V17.25H17V19C17 19.2652 17.1054 19.5196 17.2929 19.7071C17.4804 19.8946 17.7348 20 18 20H19C19.2652 20 19.5196 19.8946 19.7071 19.7071C19.8946 19.5196 20 19.2652 20 19V17C20 17 20 17 20 16.94C20.2351 16.7808 20.4275 16.5661 20.56 16.315C20.6925 16.0639 20.7612 15.784 20.76 15.5V11C20.7567 10.6748 20.6634 10.3569 20.4904 10.0815C20.3174 9.80616 20.0715 9.58411 19.78 9.44ZM19.25 15.5C19.25 15.5663 19.2237 15.6299 19.1768 15.6768C19.1299 15.7237 19.0663 15.75 19 15.75H5C4.93369 15.75 4.87011 15.7237 4.82322 15.6768C4.77634 15.6299 4.75 15.5663 4.75 15.5V11C4.75 10.9337 4.77634 10.8701 4.82322 10.8232C4.87011 10.7763 4.93369 10.75 5 10.75H19C19.0663 10.75 19.1299 10.7763 19.1768 10.8232C19.2237 10.8701 19.25 10.9337 19.25 11V15.5ZM7.47 4.91C7.48797 4.86341 7.51949 4.82327 7.56048 4.79475C7.60147 4.76624 7.65007 4.75065 7.7 4.75H16.3C16.3499 4.75065 16.3985 4.76624 16.4395 4.79475C16.4805 4.82327 16.512 4.86341 16.53 4.91L17.93 8.75H6.07L7.47 4.91Z"></path>
+                <path d="M8 14.75C8.82843 14.75 9.5 14.0784 9.5 13.25C9.5 12.4216 8.82843 11.75 8 11.75C7.17157 11.75 6.5 12.4216 6.5 13.25C6.5 14.0784 7.17157 14.75 8 14.75Z"></path>
+                <path d="M16 14.75C16.8284 14.75 17.5 14.0784 17.5 13.25C17.5 12.4216 16.8284 11.75 16 11.75C15.1716 11.75 14.5 12.4216 14.5 13.25C14.5 14.0784 15.1716 14.75 16 14.75Z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="edit-isochrone-cancel" class="modal-btn">Abbrechen</button>
+        <button type="button" id="edit-isochrone-apply" class="modal-btn modal-btn-primary">Übernehmen</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  <script src="https://unpkg.com/h3-js@4.4.0/dist/h3-js.umd.js"></script>
   <script src="https://unpkg.com/pbf@3.2.1/dist/pbf.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.2/dist/pmtiles.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/protomaps-leaflet@2/dist/protomaps-leaflet.js"></script>
@@ -378,6 +343,7 @@
   <script src="src/services/aggregation-service.js"></script>
   <script src="src/services/target-service.js"></script>
   <script src="src/services/route-service.js"></script>
+  <script src="src/services/isochrone-service.js"></script>
   <script src="src/services/population-service.js"></script>
   <script src="src/services/export-service.js"></script>
   <script src="src/services/overpass-service.js"></script>
@@ -386,17 +352,19 @@
   <script src="src/visualization/colormap-utils.js"></script>
   <script src="src/visualization/histogram-renderer.js"></script>
   <script src="src/visualization/marker-manager.js"></script>
-  <script src="src/visualization/school-renderer.js"></script>
-  <script src="src/visualization/public-transport-renderer.js"></script>
+  <script src="src/visualization/poi-renderer.js"></script>
   <script src="src/visualization/visualization.js"></script>
   <script src="src/visualization/map-renderer.js"></script>
   <script src="src/visualization/route-renderer.js"></script>
+  <script src="src/visualization/isochrone-renderer.js"></script>
+  <script src="src/visualization/overlap-renderer.js"></script>
   
   <!-- Utils -->
   <script src="src/utils/geocoder.js"></script>
   
   <!-- UI -->
   <script src="src/ui/targets-list.js"></script>
+  <script src="src/ui/saved-isochrones-list.js"></script>
   <script src="src/ui/config-helpers.js"></script>
   <script src="src/ui/distribution-selector.js"></script>
   <script src="src/ui/colormap-selector.js"></script>

@@ -83,6 +83,62 @@ const Visualization = {
     State.setStartMarkers([]);
   },
   
+  /**
+   * Zeichnet einen Startpunkt für Isochronen als blauen, verschiebbaren Kreis.
+   * @param {L.LatLng|[number,number]} latlng
+   * @param {Object} options - { index: number|null (bei gespeicherten Punkten), onDragEnd: function(newLatLng) }
+   * @returns {L.Marker}
+   */
+  drawIsochroneStartPoint(latlng, options = {}) {
+    const layerGroup = State.getLayerGroup();
+    if (!layerGroup) return null;
+    const ll = Array.isArray(latlng) ? L.latLng(latlng[0], latlng[1]) : latlng;
+    const color = (options.color && /^#[0-9a-fA-F]{6}$/.test(options.color)) ? options.color : '#3388ff';
+
+    const blueCircleIcon = L.divIcon({
+      className: 'isochrone-start-point-icon',
+      html: `<div class="isochrone-start-point-inner" style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>`,
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    });
+
+    const marker = L.marker(ll, {
+      icon: blueCircleIcon,
+      draggable: true,
+      zIndexOffset: 150
+    }).addTo(layerGroup);
+
+    if (options.index !== undefined && options.index !== null) {
+      marker._savedIsochroneIndex = options.index;
+    }
+    marker._isochroneStartKey = marker._savedIsochroneIndex ?? 'current';
+    if (typeof options.onDragEnd === 'function') {
+      marker.on('dragend', (e) => {
+        const newLatLng = e.target.getLatLng();
+        options.onDragEnd(newLatLng);
+      });
+    }
+    if (typeof options.onSelect === 'function') {
+      marker.on('click', () => options.onSelect(marker._isochroneStartKey));
+    }
+    marker.on('mouseover', () => {
+      if (marker._icon) marker._icon.classList.add('isochrone-start-point-icon--highlight');
+      if (marker._savedIsochroneIndex != null && typeof SavedIsochronesList !== 'undefined' && SavedIsochronesList.highlightRow) {
+        SavedIsochronesList.highlightRow(marker._savedIsochroneIndex, true);
+      }
+    });
+    marker.on('mouseout', () => {
+      const selected = State.getSelectedIsochroneStartKey();
+      if (selected !== marker._isochroneStartKey) {
+        if (marker._icon) marker._icon.classList.remove('isochrone-start-point-icon--highlight');
+        if (marker._savedIsochroneIndex != null && typeof SavedIsochronesList !== 'undefined' && SavedIsochronesList.highlightRow) {
+          SavedIsochronesList.highlightRow(marker._savedIsochroneIndex, false);
+        }
+      }
+    });
+    return marker;
+  },
+
   drawTargetPoint(latlng, index = null, targetId = null) {
     const layerGroup = State.getLayerGroup();
     if (!layerGroup) {
@@ -714,55 +770,26 @@ const Visualization = {
     });
   },
   
-  // Delegiert an SchoolRenderer
-  createSchoolIcon(zoom) {
-    return SchoolRenderer.createSchoolIcon(zoom);
+  // POI: Cafés, Restaurants, Bars/Kneipen (delegiert an PoiRenderer)
+  updatePoiIcons() {
+    if (typeof PoiRenderer !== 'undefined') {
+      PoiRenderer.updatePoiIcons('cafe');
+      PoiRenderer.updatePoiIcons('restaurant');
+      PoiRenderer.updatePoiIcons('bar');
+    }
   },
-  
-  updateSchoolIcons() {
-    return SchoolRenderer.updateSchoolIcons();
-  },
-  
-  drawSchools(schools) {
-    return SchoolRenderer.drawSchools(schools);
-  },
-  
-  clearSchools(schoolLayers) {
-    return SchoolRenderer.clearSchools(schoolLayers);
-  },
-  
-  drawSchoolSearchRadius(lat, lng, radiusMeters) {
-    return SchoolRenderer.drawSchoolSearchRadius(lat, lng, radiusMeters);
-  },
-  
-  clearSchoolSearchRadius() {
-    return SchoolRenderer.clearSchoolSearchRadius();
-  },
-  
-  // Delegiert an PublicTransportRenderer
-  createPlatformIcon(zoom) {
-    return PublicTransportRenderer.createPlatformIcon(zoom);
-  },
-  
-  updatePlatformIcons() {
-    return PublicTransportRenderer.updatePlatformIcons();
-  },
-  
-  drawPlatforms(platforms) {
-    return PublicTransportRenderer.drawPlatforms(platforms);
-  },
-  
-  clearPlatforms(platformLayers) {
-    return PublicTransportRenderer.clearPlatforms(platformLayers);
-  },
-  
-  drawPlatformSearchRadius(lat, lng, radiusMeters) {
-    return PublicTransportRenderer.drawPlatformSearchRadius(lat, lng, radiusMeters);
-  },
-  
-  clearPlatformSearchRadius() {
-    return PublicTransportRenderer.clearPlatformSearchRadius();
-  },
+  drawCafes(places) { return PoiRenderer ? PoiRenderer.drawPois(places, 'cafe') : []; },
+  clearCafes(layers) { if (PoiRenderer) PoiRenderer.clearPois(layers); },
+  drawCafeSearchRadius(lat, lng, radiusMeters) { return PoiRenderer ? PoiRenderer.drawPoiSearchRadius(lat, lng, radiusMeters, 'cafe') : null; },
+  clearCafeSearchRadius() { if (PoiRenderer) PoiRenderer.clearPoiSearchRadius('cafe'); },
+  drawRestaurants(places) { return PoiRenderer ? PoiRenderer.drawPois(places, 'restaurant') : []; },
+  clearRestaurants(layers) { if (PoiRenderer) PoiRenderer.clearPois(layers); },
+  drawRestaurantSearchRadius(lat, lng, radiusMeters) { return PoiRenderer ? PoiRenderer.drawPoiSearchRadius(lat, lng, radiusMeters, 'restaurant') : null; },
+  clearRestaurantSearchRadius() { if (PoiRenderer) PoiRenderer.clearPoiSearchRadius('restaurant'); },
+  drawBars(places) { return PoiRenderer ? PoiRenderer.drawPois(places, 'bar') : []; },
+  clearBars(layers) { if (PoiRenderer) PoiRenderer.clearPois(layers); },
+  drawBarSearchRadius(lat, lng, radiusMeters) { return PoiRenderer ? PoiRenderer.drawPoiSearchRadius(lat, lng, radiusMeters, 'bar') : null; },
+  clearBarSearchRadius() { if (PoiRenderer) PoiRenderer.clearPoiSearchRadius('bar'); },
   
   // Delegiert an MarkerManager
   highlightTargetMarker(index) {
