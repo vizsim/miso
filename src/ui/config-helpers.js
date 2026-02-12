@@ -6,7 +6,7 @@
  */
 function updateConfigFromUI() {
   // Profil vom aktiven Button
-  const activeProfileBtn = Utils.getElement('.profile-btn.active');
+  const activeProfileBtn = Utils.getElement('.profile-btn.active:not(.edit-profile-btn):not([style*="display: none"])');
   if (activeProfileBtn) {
     CONFIG.PROFILE = activeProfileBtn.dataset.profile || CONFIG.PROFILE;
   }

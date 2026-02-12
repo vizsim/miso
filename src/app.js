@@ -66,6 +66,7 @@ const App = {
     SavedIsochronesList.init();
     SavedIsochronesList.toggle(CONFIG.REMEMBER_ISOCHRONE_STARTS);
     if (SavedIsochronesList.update) SavedIsochronesList.update();
+    this._applyTransitProfileAvailability();
     
     this._setupRememberIsochroneStarts();
     this._setupOptimizationOverlap();
@@ -75,6 +76,40 @@ const App = {
     this._updateNoTargetHint();
     // Histogramm-Platzhalter anzeigen (keine Routen)
     Visualization.updateDistanceHistogram([], null, {});
+  },
+
+  _applyTransitProfileAvailability() {
+    const enabled = (typeof isTransitProfileEnabled === 'function') ? isTransitProfileEnabled() : true;
+    const mainTransitBtn = Utils.getElement('#profile-transit');
+    const editTransitBtn = document.querySelector('#edit-isochrone-profile-btns .edit-profile-btn[data-profile="transit"]');
+    if (mainTransitBtn) mainTransitBtn.style.display = enabled ? '' : 'none';
+    if (editTransitBtn) {
+      editTransitBtn.style.display = enabled ? '' : 'none';
+      if (!enabled) editTransitBtn.classList.remove('active');
+    }
+
+    if (!enabled && String(CONFIG.PROFILE || '').toLowerCase() === 'transit') {
+      CONFIG.PROFILE = 'foot';
+    }
+
+    const mainBtns = Utils.getElements('.profile-btn:not(.edit-profile-btn)');
+    if (mainBtns && mainBtns.length) {
+      let hasActiveVisible = false;
+      mainBtns.forEach((btn) => {
+        const profile = btn.dataset.profile || '';
+        if (profile === 'transit' && !enabled) return;
+        const shouldBeActive = profile === CONFIG.PROFILE;
+        btn.classList.toggle('active', shouldBeActive);
+        if (shouldBeActive) hasActiveVisible = true;
+      });
+      if (!hasActiveVisible) {
+        const fallback = Array.from(mainBtns).find(btn => (btn.dataset.profile || '') === 'foot');
+        if (fallback) {
+          fallback.classList.add('active');
+          CONFIG.PROFILE = 'foot';
+        }
+      }
+    }
   },
 
   _initOverlapComputeWorker() {
@@ -345,128 +380,28 @@ const App = {
    * Richtet die Profil-Buttons ein
    */
   _setupProfileButtons() {
-    const profileBtns = Utils.getElements('.profile-btn');
-    if (!profileBtns || profileBtns.length === 0) return;
-    
-    // Initiale Aktivierung
-    profileBtns.forEach(btn => {
-      if (btn.dataset.profile === CONFIG.PROFILE) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-    
-    // Event-Listener
-    profileBtns.forEach(btn => {
-      btn.addEventListener('click', async () => {
-        // Alle Buttons deaktivieren
-        profileBtns.forEach(b => b.classList.remove('active'));
-        // Aktiven Button aktivieren
-        btn.classList.add('active');
-        
-        // Config aktualisieren
-        this._updateConfigFromUI();
-        if (typeof updateConfigFromUI !== 'function') {
-          CONFIG.PROFILE = btn.dataset.profile || CONFIG.PROFILE;
-        }
-        
-        // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun (wie bei anderen Config-Werten)
-        const selectedIndex = State.getSelectedTargetIndex();
-        if (selectedIndex !== null && isRememberMode()) {
-          // Nichts tun - Benutzer muss auf Stift-Icon klicken, um Änderungen zu übernehmen
-          return;
-        }
-        
-        // Nur wenn kein Zielpunkt ausgewählt ist, sofort umsetzen
-        EventBus.emit(Events.CONFIG_PROFILE_CHANGED, { profile: CONFIG.PROFILE });
-      });
-    });
+    ConfigSetupHandlers.setupProfileButtons(this);
   },
 
   /**
    * Histogramm-Modus: Beeline vs. Echte Routenlänge
    */
   _setupHistogramModeButtons() {
-    const btns = Utils.getElements('.histogram-mode-btn');
-    if (!btns || btns.length === 0) return;
-    btns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        btns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this._refreshHistogram();
-      });
-    });
+    ConfigSetupHandlers.setupHistogramModeButtons(this);
   },
   
   /**
    * Richtet den Aggregation-Toggle ein
    */
   _setupAggregationToggle() {
-    const aggregatedInput = Utils.getElement('#config-aggregated');
-    if (!aggregatedInput) return;
-    
-    // Initialer Wert
-    aggregatedInput.checked = CONFIG.AGGREGATED;
-    
-    // Event-Listener
-    aggregatedInput.addEventListener('change', () => {
-      // Config aktualisieren
-      this._updateConfigFromUI();
-      if (typeof updateConfigFromUI !== 'function') {
-        CONFIG.AGGREGATED = aggregatedInput.checked;
-      }
-      
-      // UI aktualisieren
-      if (typeof toggleAggregationUI === 'function') {
-        toggleAggregationUI();
-      } else {
-        // Fallback: UI manuell aktualisieren
-        const legend = Utils.getElement('#legend');
-        const methodGroup = Utils.getElement('#aggregation-method-group');
-        const hideStartPointsGroup = Utils.getElement('#hide-start-points-group');
-        
-        if (legend) {
-          legend.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-        }
-        if (methodGroup) {
-          methodGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-        }
-        if (hideStartPointsGroup) {
-          hideStartPointsGroup.style.display = CONFIG.AGGREGATED ? 'block' : 'none';
-        }
-        
-        // Legende-Gradient aktualisieren wenn sichtbar
-        if (CONFIG.AGGREGATED && legend && legend.style.display === 'block') {
-          Visualization.updateLegendGradient();
-          Visualization.updateColormapPreviews();
-        }
-      }
-      
-      EventBus.emit(Events.CONFIG_AGGREGATION_CHANGED);
-    });
+    ConfigSetupHandlers.setupAggregationToggle(this);
   },
   
   /**
    * Richtet die Aggregierungsmethode ein
    */
   _setupAggregationMethod() {
-    const methodInput = Utils.getElement('#config-aggregation-method');
-    if (!methodInput) return;
-    
-    // Initialer Wert
-    methodInput.value = CONFIG.AGGREGATION_METHOD;
-    
-    // Event-Listener
-    methodInput.addEventListener('change', () => {
-      // Config aktualisieren
-      this._updateConfigFromUI();
-      if (typeof updateConfigFromUI !== 'function') {
-        CONFIG.AGGREGATION_METHOD = methodInput.value || CONFIG.AGGREGATION_METHOD;
-      }
-      
-      EventBus.emit(Events.CONFIG_AGGREGATION_CHANGED);
-    });
+    ConfigSetupHandlers.setupAggregationMethod(this);
   },
   
   
@@ -557,24 +492,7 @@ const App = {
    * Richtet den Event-Handler für Anzahl Routen ein
    */
   _setupRouteCountInput() {
-    const nInput = Utils.getElement('#config-n');
-    if (!nInput) return;
-    
-    // Initialer Wert
-    nInput.value = CONFIG.N;
-    
-    // Event-Listener
-    nInput.addEventListener('change', async () => {
-      // Config aktualisieren
-      this._updateConfigFromUI();
-      if (typeof updateConfigFromUI !== 'function') {
-        CONFIG.N = Utils.validateNumber(nInput.value, 1, 1000, CONFIG.N);
-        nInput.value = CONFIG.N; // Korrigierter Wert zurücksetzen
-      }
-      
-      // Routen neu berechnen, wenn Zielpunkt vorhanden
-      await this._recalculateRoutesIfTargetExists();
-    });
+    ConfigSetupHandlers.setupRouteCountInput(this);
   },
   
   /**
@@ -1323,26 +1241,7 @@ const App = {
    * @returns {Promise<(U|null)[]>}
    */
   async _mapWithConcurrency(items, limit, mapper) {
-    const arr = Array.isArray(items) ? items : [];
-    const n = arr.length;
-    const results = new Array(n).fill(null);
-    const k = Math.max(1, Math.min(limit || 1, n));
-    let next = 0;
-    const worker = async () => {
-      while (true) {
-        const i = next++;
-        if (i >= n) break;
-        try {
-          results[i] = await mapper(arr[i], i);
-        } catch (_) {
-          results[i] = null;
-        }
-      }
-    };
-    const workers = [];
-    for (let i = 0; i < k; i++) workers.push(worker());
-    await Promise.all(workers);
-    return results;
+    return AsyncHelpers.mapWithConcurrency(items, limit, mapper);
   },
 
   _enforceOverlapBudgets(statusEl) {
@@ -1408,25 +1307,14 @@ const App = {
    * aktualisiert CONFIG und gibt { timeLimitSec, buckets } zurück.
    */
   _getIsochroneParamsFromUI() {
-    const bucketSizeMin = parseInt(document.getElementById('config-isochrone-bucket-size')?.value || '5', 10) || 5;
-    let timeMin = parseInt(document.getElementById('config-isochrone-time')?.value || '10', 10) || 10;
-    timeMin = Math.round(timeMin / bucketSizeMin) * bucketSizeMin;
-    timeMin = Math.max(bucketSizeMin, Math.min(120, timeMin));
-    CONFIG.ISOCHRONE_BUCKET_SIZE_MIN = bucketSizeMin;
-    CONFIG.ISOCHRONE_TIME_LIMIT = timeMin * 60;
-    CONFIG.ISOCHRONE_BUCKETS = Math.round(timeMin / bucketSizeMin);
-    return { timeLimitSec: CONFIG.ISOCHRONE_TIME_LIMIT, buckets: CONFIG.ISOCHRONE_BUCKETS };
+    return IsochroneParams.getFromUI();
   },
 
   /**
    * Holt Bucket-Größe (Min.) aus der UI und setzt CONFIG.ISOCHRONE_BUCKET_SIZE_MIN
    */
   _getIsochroneBucketSizeMin() {
-    const el = document.getElementById('config-isochrone-bucket-size');
-    const v = el ? parseInt(el.value, 10) : 5;
-    const size = [1, 2, 3, 5, 10].includes(v) ? v : 5;
-    if (CONFIG) CONFIG.ISOCHRONE_BUCKET_SIZE_MIN = size;
-    return size;
+    return IsochroneParams.getBucketSizeMin();
   },
 
   /**
@@ -1453,20 +1341,7 @@ const App = {
   },
 
   _syncIsochroneTimeToBucketSize() {
-    const timeInput = Utils.getElement('#config-isochrone-time');
-    const bucketSizeMin = this._getIsochroneBucketSizeMin();
-    if (!timeInput) return bucketSizeMin;
-    timeInput.min = bucketSizeMin;
-    timeInput.step = bucketSizeMin;
-    const max = 120;
-    timeInput.max = max;
-    let timeMin = parseInt(timeInput.value, 10) || bucketSizeMin;
-    const rounded = Math.round(timeMin / bucketSizeMin) * bucketSizeMin;
-    timeMin = Math.max(bucketSizeMin, Math.min(max, rounded));
-    timeInput.value = timeMin;
-    CONFIG.ISOCHRONE_TIME_LIMIT = timeMin * 60;
-    CONFIG.ISOCHRONE_BUCKETS = Math.round(timeMin / bucketSizeMin);
-    return bucketSizeMin;
+    return IsochroneParams.syncTimeToBucketSize();
   },
 
   /**
@@ -1525,32 +1400,7 @@ const App = {
    * Richtet den Event-Handler für Radius ein
    */
   _setupRadiusInput() {
-    const radiusInput = Utils.getElement('#config-radius');
-    if (!radiusInput) return;
-    
-    // Initialer Wert (in km)
-    radiusInput.value = CONFIG.RADIUS_M / 1000;
-    
-    // Event-Listener
-    radiusInput.addEventListener('change', async () => {
-      // Config aktualisieren
-      this._updateConfigFromUI();
-      if (typeof updateConfigFromUI !== 'function') {
-        const radiusKm = Utils.validateNumber(radiusInput.value, 0.1, 100, CONFIG.RADIUS_M / 1000);
-        CONFIG.RADIUS_M = radiusKm * 1000;
-        radiusInput.value = radiusKm; // Korrigierter Wert zurücksetzen
-      }
-      
-      // Wenn ein Zielpunkt ausgewählt ist, nichts automatisch tun
-      // Benutzer muss explizit auf Stift-Icon klicken, um Änderungen zu übernehmen
-      const selectedIndex = State.getSelectedTargetIndex();
-      if (selectedIndex !== null && isRememberMode()) {
-        return; // Nicht automatisch berechnen
-      }
-      
-      // Routen neu berechnen, wenn Zielpunkt vorhanden
-      await this._recalculateRoutesIfTargetExists();
-    });
+    ConfigSetupHandlers.setupRadiusInput(this);
   },
   
   
@@ -1558,46 +1408,14 @@ const App = {
    * Richtet den Event-Handler für "Startpunkte ausblenden" ein
    */
   _setupHideStartPoints() {
-    const hideStartPointsInput = Utils.getElement('#config-hide-start-points');
-    if (!hideStartPointsInput) return;
-    
-    // Initialer Wert
-    hideStartPointsInput.checked = CONFIG.HIDE_START_POINTS;
-    
-    // Event-Listener
-    hideStartPointsInput.addEventListener('change', () => {
-      // Config aktualisieren
-      this._updateConfigFromUI();
-      if (typeof updateConfigFromUI !== 'function') {
-        CONFIG.HIDE_START_POINTS = hideStartPointsInput.checked;
-      }
-      
-      // Startpunkte sofort ausblenden/einblenden
-      Visualization.toggleStartPointsVisibility();
-    });
+    ConfigSetupHandlers.setupHideStartPoints(this);
   },
   
   /**
    * Richtet den Event-Handler für "Zielpunkte ausblenden" ein
    */
   _setupHideTargetPoints() {
-    const hideTargetPointsInput = Utils.getElement('#config-hide-target-points');
-    if (!hideTargetPointsInput) return;
-    
-    // Initialer Wert
-    hideTargetPointsInput.checked = CONFIG.HIDE_TARGET_POINTS;
-    
-    // Event-Listener
-    hideTargetPointsInput.addEventListener('change', () => {
-      // Config aktualisieren
-      this._updateConfigFromUI();
-      if (typeof updateConfigFromUI !== 'function') {
-        CONFIG.HIDE_TARGET_POINTS = hideTargetPointsInput.checked;
-      }
-      
-      // Zielpunkte sofort ausblenden/einblenden
-      Visualization.toggleTargetPointsVisibility();
-    });
+    ConfigSetupHandlers.setupHideTargetPoints(this);
   },
   
   /**

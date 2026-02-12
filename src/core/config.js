@@ -13,6 +13,19 @@ const CONFIG = {
   // Isochrone API (gleicher Server, anderer Pfad)
   GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone", 
   //GH_ISOCHRONE_URL: "http://localhost:8990/isochrone",
+  // Transitous/Motis one-to-all (ÖPNV-Isochrone, approximiert im Browser)
+  // Für lokale Entwicklung i. d. R. per Proxy auf /transitous/* routen.
+  TRANSITOUS_ONE_TO_ALL_URL: "/transitous/api/v1/one-to-all",
+  //TRANSITOUS_ONE_TO_ALL_URL: "https://api.transitous.org/api/v1/one-to-all",
+  TRANSITOUS_WALK_SPEED_MPS: 1.4, // Restzeit -> Fußweg-Puffer (m/s)
+  TRANSITOUS_MAX_TRANSFERS: 14,
+  // Einheit der "duration" aus one-to-all:
+  // 'auto' (heuristisch), 'minutes' oder 'seconds'
+  TRANSITOUS_DURATION_UNIT: 'auto',
+  // ÖPNV-Profil ein-/ausschalten (z. B. für statisches Hosting wie GitHub Pages)
+  TRANSIT_PROFILE_ENABLED: true,
+  // Optionaler Guard: auf *.github.io standardmäßig ausblenden/deaktivieren
+  TRANSIT_PROFILE_AUTO_DISABLE_ON_GITHUB_PAGES: true,
   ISOCHRONE_TIME_LIMIT: 1500, // Sekunden (wird aus Zeitlimit Min. abgeleitet)
   ISOCHRONE_BUCKET_SIZE_MIN: 5, // Bucket-Größe in Minuten (z. B. 5 → 0–5, 5–10, …); Zeitlimit nur in diesem Schritt wählbar
   ISOCHRONE_BUCKETS: 0, // wird berechnet: Zeitlimit / Bucket-Größe
@@ -62,3 +75,23 @@ function isRememberIsochroneStarts() {
   return CONFIG.REMEMBER_ISOCHRONE_STARTS === true;
 }
 
+/**
+ * Prüft, ob die App auf GitHub Pages läuft.
+ * @returns {boolean}
+ */
+function isGitHubPagesHost() {
+  const host = (typeof window !== 'undefined' && window.location && window.location.hostname)
+    ? window.location.hostname
+    : '';
+  return /\.github\.io$/i.test(host);
+}
+
+/**
+ * Prüft, ob das ÖPNV-Profil (Transitous) aktiv sein soll.
+ * @returns {boolean}
+ */
+function isTransitProfileEnabled() {
+  if (CONFIG.TRANSIT_PROFILE_ENABLED === false) return false;
+  if (CONFIG.TRANSIT_PROFILE_AUTO_DISABLE_ON_GITHUB_PAGES === true && isGitHubPagesHost()) return false;
+  return true;
+}

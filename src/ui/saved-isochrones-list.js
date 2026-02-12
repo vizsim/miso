@@ -6,6 +6,11 @@ const SavedIsochronesList = {
   _editSelectedCoordinates: null, // [lat,lng] wenn Adresse ausgewählt
   _editLocationDebounce: null,
 
+  _isTransitEnabled() {
+    if (typeof isTransitProfileEnabled === 'function') return isTransitProfileEnabled();
+    return CONFIG?.TRANSIT_PROFILE_ENABLED !== false;
+  },
+
   init() {
     this._container = Utils.getElement('#saved-isochrones-list');
     this._listGroup = Utils.getElement('#saved-isochrones-list-group');
@@ -147,7 +152,8 @@ const SavedIsochronesList = {
     const item = saved[index];
     const timeMin = item.time_limit != null ? Math.round(item.time_limit / 60) : 10;
     const buckets = item.buckets != null ? item.buckets : 5;
-    const profile = item.profile || 'foot';
+    const requestedProfile = item.profile || 'foot';
+    const profile = (!this._isTransitEnabled() && requestedProfile === 'transit') ? 'foot' : requestedProfile;
     const allowedSizes = [1, 2, 3, 5, 10];
     let bucketSizeMin = buckets > 0 ? Math.round(timeMin / buckets) : 5;
     if (!allowedSizes.includes(bucketSizeMin)) {
@@ -230,6 +236,7 @@ const SavedIsochronesList = {
       const active = Array.from(profileBtns).find(function(b) { return b.classList.contains('active'); });
       if (active) profile = active.dataset.profile || 'foot';
     }
+    if (!this._isTransitEnabled() && profile === 'transit') profile = 'foot';
     const selectedCoords = this._editSelectedCoordinates; // vor dem Schließen sichern
     this._closeEditModal();
     if (typeof App !== 'undefined' && App._onEditSavedIsochroneConfig) {
