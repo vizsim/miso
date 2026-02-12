@@ -31,6 +31,11 @@ function getBucketStyle(bucket, buckets, baseRgb) {
 }
 
 const IsochroneRenderer = {
+  getStyleForBucket(bucket, buckets, colorHex) {
+    const baseRgb = (colorHex && hexToRgb(colorHex)) || null;
+    return getBucketStyle(bucket, buckets, baseRgb);
+  },
+
   _isFiniteCoord(pt) {
     return Array.isArray(pt) && pt.length >= 2 && Number.isFinite(pt[0]) && Number.isFinite(pt[1]);
   },
@@ -167,6 +172,222 @@ const IsochroneRenderer = {
     return [[first[1], first[0]]];
   },
 
+  _buildIsochroneFeatureCollection(isochroneResult, colorOverride) {
+    const { polygons, time_limit, buckets } = isochroneResult || {};
+    const baseRgb = ((colorOverride || isochroneResult?.color) && hexToRgb(colorOverride || isochroneResult.color)) || null;
+    const bucketBands = this._buildBucketBands(polygons);
+    const sorted = [...bucketBands].sort((a, b) => {
+      const bucketA = Number(a?.feature?.properties?.bucket ?? a?.feature?.bucket);
+      const bucketB = Number(b?.feature?.properties?.bucket ?? b?.feature?.bucket);
+      const aHasBucket = Number.isFinite(bucketA);
+      const bHasBucket = Number.isFinite(bucketB);
+      if (aHasBucket && bHasBucket && bucketA !== bucketB) return bucketB - bucketA;
+      const geomA = a.bandGeometry || a.feature?.geometry || a.feature || a;
+      const geomB = b.bandGeometry || b.feature?.geometry || b.feature || b;
+      return this._estimateGeometryArea(geomB) - this._estimateGeometryArea(geomA);
+    });
+
+    const features = [];
+    sorted.forEach((row, index) => {
+      const feature = row.feature || row;
+      const rawGeom = row.bandGeometry || feature.geometry || feature;
+      const geom = this._sanitizeGeometry(rawGeom);
+      if (!geom) return;
+      const rawBucket = feature.properties?.bucket ?? feature.bucket;
+      const fallbackBucket = (sorted.length - 1) - index;
+      const bucket = Number.isFinite(Number(rawBucket)) ? Number(rawBucket) : fallbackBucket;
+      const style = getBucketStyle(bucket, buckets, baseRgb);
+      const label = this.getTimeBucketLabel(bucket, time_limit, buckets);
+      features.push({
+        type: 'Feature',
+        id: index + 1,
+        geometry: geom,
+        properties: {
+          bucket,
+          sortKey: index + 1,
+          timeLabel: label,
+          fillColor: style.fillColor,
+          lineColor: style.lineColor,
+          fillOpacity: style.fillOpacity,
+          strokeOpacity: style.strokeOpacity
+        }
+      });
+    });
+    return { type: 'FeatureCollection', features };
+  },
+
+  drawSavedIsochroneBatch(isochroneResult) {
+    if (!isochroneResult || isochroneResult.id == null) return null;
+    const layerGroup = State.getLayerGroup && State.getLayerGroup();
+    if (!layerGroup) return null;
+    const self = this;
+    const safeId = String(isochroneResult.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const sourceId = `iso-batch-${safeId}-src`;
+    const fillLayerId = `iso-batch-${safeId}-fill`;
+    const lineLayerId = `iso-batch-${safeId}-line`;
+    const tooltipClass = 'isochrone-tooltip';
+
+    const batchLayer = {
+      _id: `iso-batch-${safeId}`,
+      _isIsochroneLayer: true,
+      _isIsochroneBatch: true,
+      _savedIsochroneId: isochroneResult.id,
+      _sourceId: sourceId,
+      _fillLayerId: fillLayerId,
+      _lineLayerId: lineLayerId,
+      _isochroneResult: { ...isochroneResult },
+      _featureCollection: self._buildIsochroneFeatureCollection(isochroneResult),
+      _map: null,
+      _addRetryTimer: null,
+      _handlers: [],
+      _hoveredFeatureId: null,
+      _hoverPopup: null,
+
+      _setHoveredFeature(nextId) {
+        if (!this._map) return;
+        if (this._hoveredFeatureId != null && this._hoveredFeatureId !== nextId) {
+          try { this._map.setFeatureState({ source: this._sourceId, id: this._hoveredFeatureId }, { hover: false }); } catch (_) {}
+        }
+        this._hoveredFeatureId = nextId;
+        if (nextId != null) {
+          try { this._map.setFeatureState({ source: this._sourceId, id: nextId }, { hover: true }); } catch (_) {}
+        }
+      },
+
+      _wireInteractions() {
+        if (!this._map || this._handlers.length > 0) return;
+        const onMove = (e) => {
+          const topFeature = Array.isArray(e.features) ? e.features[0] : null;
+          const featureId = topFeature?.id ?? null;
+          this._setHoveredFeature(featureId);
+          if (this._hoverPopup) {
+            this._hoverPopup.remove();
+            this._hoverPopup = null;
+          }
+          const label = topFeature?.properties?.timeLabel;
+          if (!label) return;
+          this._hoverPopup = new maplibregl.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            className: tooltipClass,
+            offset: 10
+          })
+            .setLngLat([e.lngLat.lng, e.lngLat.lat])
+            .setHTML(label)
+            .addTo(this._map);
+        };
+        const onLeave = () => {
+          this._setHoveredFeature(null);
+          if (this._hoverPopup) {
+            this._hoverPopup.remove();
+            this._hoverPopup = null;
+          }
+        };
+        this._map.on('mousemove', this._fillLayerId, onMove);
+        this._map.on('mouseleave', this._fillLayerId, onLeave);
+        this._handlers = [
+          ['mousemove', this._fillLayerId, onMove],
+          ['mouseleave', this._fillLayerId, onLeave]
+        ];
+      },
+
+      _addToRenderer(renderer) {
+        const map = renderer?._map;
+        if (!map) return;
+        if (this._map === map) {
+          const src = map.getSource(this._sourceId);
+          if (src && src.setData) src.setData(this._featureCollection);
+          return;
+        }
+        if (!map.isStyleLoaded()) {
+          if (this._addRetryTimer) return;
+          this._addRetryTimer = setTimeout(() => {
+            this._addRetryTimer = null;
+            if (renderer._layerGroup && renderer._layerGroup.hasLayer(this)) this._addToRenderer(renderer);
+          }, 60);
+          return;
+        }
+        const srcData = this._featureCollection || { type: 'FeatureCollection', features: [] };
+        if (!map.getSource(this._sourceId)) {
+          map.addSource(this._sourceId, { type: 'geojson', data: srcData });
+        } else {
+          const src = map.getSource(this._sourceId);
+          if (src && src.setData) src.setData(srcData);
+        }
+        if (!map.getLayer(this._fillLayerId)) {
+          map.addLayer({
+            id: this._fillLayerId,
+            source: this._sourceId,
+            type: 'fill',
+            layout: { 'fill-sort-key': ['get', 'sortKey'] },
+            paint: {
+              'fill-color': ['get', 'fillColor'],
+              'fill-opacity': ['get', 'fillOpacity']
+            }
+          });
+        }
+        if (!map.getLayer(this._lineLayerId)) {
+          map.addLayer({
+            id: this._lineLayerId,
+            source: this._sourceId,
+            type: 'line',
+            layout: { 'line-sort-key': ['get', 'sortKey'] },
+            paint: {
+              'line-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#444', ['get', 'lineColor']],
+              'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 1, ['get', 'strokeOpacity']],
+              'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 3.5, 2.5]
+            }
+          });
+        }
+        this._map = map;
+        this._wireInteractions();
+      },
+
+      _removeFromRenderer() {
+        if (this._addRetryTimer) {
+          clearTimeout(this._addRetryTimer);
+          this._addRetryTimer = null;
+        }
+        if (!this._map) return;
+        this._handlers.forEach(([name, layerId, fn]) => {
+          try { this._map.off(name, layerId, fn); } catch (_) {}
+        });
+        this._handlers = [];
+        this._setHoveredFeature(null);
+        if (this._hoverPopup) {
+          this._hoverPopup.remove();
+          this._hoverPopup = null;
+        }
+        if (this._map.getLayer(this._lineLayerId)) this._map.removeLayer(this._lineLayerId);
+        if (this._map.getLayer(this._fillLayerId)) this._map.removeLayer(this._fillLayerId);
+        if (this._map.getSource(this._sourceId)) this._map.removeSource(this._sourceId);
+        this._map = null;
+      },
+
+      setIsochroneData(nextIsochroneResult) {
+        this._isochroneResult = { ...nextIsochroneResult };
+        this._savedIsochroneId = nextIsochroneResult.id;
+        this._featureCollection = self._buildIsochroneFeatureCollection(nextIsochroneResult);
+        if (this._map && this._map.getSource(this._sourceId)) {
+          const src = this._map.getSource(this._sourceId);
+          if (src && src.setData) src.setData(this._featureCollection);
+        }
+      },
+
+      setColor(colorHex) {
+        const next = { ...this._isochroneResult, color: colorHex };
+        this._isochroneResult = next;
+        this._featureCollection = self._buildIsochroneFeatureCollection(next, colorHex);
+        if (this._map && this._map.getSource(this._sourceId)) {
+          const src = this._map.getSource(this._sourceId);
+          if (src && src.setData) src.setData(this._featureCollection);
+        }
+      }
+    };
+    layerGroup.addLayer(batchLayer);
+    return batchLayer;
+  },
+
   /**
    * Zeichnet Isochrone-Polygone aus der API-Response.
    * @param {Object} isochroneResult - { center, polygons, time_limit, buckets }
@@ -197,35 +418,11 @@ const IsochroneRenderer = {
       return this._estimateGeometryArea(geomB) - this._estimateGeometryArea(geomA);
     });
 
-    if (CONFIG.ISOCHRONE_DEBUG_BUCKETS) {
-      const debugRows = sorted.map((row, i) => {
-        const rawBucket = row?.feature?.properties?.bucket ?? row?.feature?.bucket;
-        const fallbackBucket = (sorted.length - 1) - i;
-        const bandGeom = row?.bandGeometry || {};
-        const bandValid = this._hasDrawableGeometry(bandGeom);
-        return {
-          drawIndex: i,
-          rawBucket,
-          styleBucket: fallbackBucket,
-          sourceGeomType: (row?.feature?.geometry || row?.feature || {}).type || 'n/a',
-          bandGeomType: bandGeom.type || 'n/a',
-          bandValid
-        };
-      });
-      console.log('[ISO DEBUG] renderer draw order');
-      console.table(debugRows);
-    }
-
     sorted.forEach((row, index) => {
       const feature = row.feature || row;
       const rawGeom = row.bandGeometry || feature.geometry || feature;
       const geom = this._sanitizeGeometry(rawGeom);
-      if (!geom) {
-        if (CONFIG.ISOCHRONE_DEBUG_BUCKETS) {
-          console.log('[ISO DEBUG] skipped invalid geometry for bucket', feature?.properties?.bucket ?? feature?.bucket ?? index);
-        }
-        return;
-      }
+      if (!geom) return;
       const rawBucket = feature.properties?.bucket ?? feature.bucket;
       const fallbackBucket = (sorted.length - 1) - index; // 0=innen, n-1=außen
       const bucket = Number.isFinite(Number(rawBucket)) ? Number(rawBucket) : fallbackBucket;
@@ -243,6 +440,9 @@ const IsochroneRenderer = {
       });
       if (!polygon) return;
       polygon._isIsochroneLayer = true;
+      polygon._savedIsochroneId = isochroneResult.id != null ? isochroneResult.id : null;
+      polygon._isochroneBucket = bucket;
+      polygon._isochroneBuckets = buckets;
       polygon.bindTooltip(label, {
         permanent: false,
         direction: 'top',
@@ -286,23 +486,6 @@ const IsochroneRenderer = {
 
       polygon.addTo(layerGroup);
       layers.push(polygon);
-
-      if (CONFIG.ISOCHRONE_DEBUG_BUCKETS) {
-        const map = State.getMap && State.getMap();
-        console.log('[ISO DEBUG] layer add status', {
-          bucket,
-          styleBucket,
-          fillColor: style.fillColor,
-          lineColor: style.lineColor,
-          addedToMap: !!polygon._map,
-          sourceId: polygon._sourceId,
-          fillLayerId: polygon._fillLayerId,
-          lineLayerId: polygon._lineLayerId,
-          hasSource: !!(map && polygon._sourceId && map.getSource(polygon._sourceId)),
-          hasFillLayer: !!(map && polygon._fillLayerId && map.getLayer(polygon._fillLayerId)),
-          hasLineLayer: !!(map && polygon._lineLayerId && map.getLayer(polygon._lineLayerId))
-        });
-      }
     });
 
     return layers;

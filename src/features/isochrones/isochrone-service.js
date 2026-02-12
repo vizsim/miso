@@ -1,38 +1,5 @@
 // ==== Isochrone-Service: Isochrone vom GraphHopper-Server abfragen ====
 const IsochroneService = {
-  _debugBucketSummary(label, polygons) {
-    if (!CONFIG.ISOCHRONE_DEBUG_BUCKETS) return;
-    if (!Array.isArray(polygons) || polygons.length === 0) {
-      console.log(`[ISO DEBUG] ${label}: no polygons`);
-      return;
-    }
-    const rows = polygons.map((feature, idx) => {
-      const geom = feature?.geometry || feature || {};
-      const bucket = feature?.properties?.bucket ?? feature?.bucket ?? idx;
-      let area = null;
-      let bbox = null;
-      try {
-        if (typeof turf !== 'undefined' && turf.area) {
-          area = Math.round(turf.area({ type: 'Feature', geometry: geom, properties: {} }));
-        }
-      } catch (_) {}
-      try {
-        if (typeof turf !== 'undefined' && turf.bbox) {
-          const b = turf.bbox({ type: 'Feature', geometry: geom, properties: {} });
-          bbox = b.map(v => Number(v.toFixed(5))).join(',');
-        }
-      } catch (_) {}
-      return {
-        idx,
-        bucket,
-        geomType: geom?.type || 'n/a',
-        areaM2: area,
-        bbox
-      };
-    });
-    console.log(`[ISO DEBUG] ${label}`);
-    console.table(rows);
-  },
   _metersToKm(m) {
     return (m || 0) / 1000;
   },
@@ -285,7 +252,6 @@ const IsochroneService = {
       if (polygons && polygons.features) polygons = polygons.features;
       if (!polygons) polygons = data.features || [];
       polygons = Array.isArray(polygons) ? polygons : [];
-      this._debugBucketSummary('raw polygons from API', polygons);
       if (!polygons.length) {
         Utils.showError('Isochrone: Keine Polygone in der Antwort.', true);
         return null;
@@ -297,7 +263,6 @@ const IsochroneService = {
         const maxCells = CONFIG.ISOCHRONE_HEX_MAX_CELLS_PER_BUCKET || 2500;
         const autoUpscale = CONFIG.ISOCHRONE_HEX_AUTO_UPSCALE !== false;
         polygons = this._hexSnapPolygons(polygons, cellSizeM, maxCells, autoUpscale);
-        this._debugBucketSummary('hex-snapped polygons', polygons);
       }
 
       const result = {

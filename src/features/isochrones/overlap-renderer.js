@@ -39,6 +39,22 @@ const OverlapRenderer = {
     return null;
   },
 
+  _getBucketIndex(feature) {
+    const rawBucket = feature?.properties?.bucket ?? feature?.bucket;
+    const bucket = Number(rawBucket);
+    return Number.isFinite(bucket) ? bucket : null;
+  },
+
+  _indexPolygonsByBucket(polygons) {
+    const byBucket = new Map();
+    for (const feature of (polygons || [])) {
+      const bucket = this._getBucketIndex(feature);
+      if (bucket == null || byBucket.has(bucket)) continue;
+      byBucket.set(bucket, feature);
+    }
+    return byBucket;
+  },
+
   /**
    * Berechnet die Schnittmenge mehrerer Polygone (pro Bucket).
    * @param {Array} savedIsochrones - [{ polygons, time_limit, buckets }, ...]
@@ -56,12 +72,12 @@ const OverlapRenderer = {
     const buckets = first.buckets != null ? first.buckets : 5;
     const timeLimit = first.time_limit != null ? first.time_limit : 600;
     const results = [];
+    const bucketIndexesByStart = savedIsochrones.map(item => this._indexPolygonsByBucket(item.polygons));
 
     for (let bucketIndex = 0; bucketIndex < buckets; bucketIndex++) {
       const features = [];
-      for (const item of savedIsochrones) {
-        const polygons = item.polygons || [];
-        const feat = polygons.find(f => (f.properties?.bucket ?? f.bucket) === bucketIndex);
+      for (const byBucket of bucketIndexesByStart) {
+        const feat = byBucket.get(bucketIndex);
         if (!feat) continue;
         const turfFeat = this._toTurfFeature(feat);
         if (turfFeat) features.push(turfFeat);
@@ -156,15 +172,75 @@ const OverlapRenderer = {
     return (bucketIndex + 0.5) * (timeLimit / n);
   },
 
-  _isH3HexIsochroneFeature(feature) {
+  _h3ResolutionForCellSizeM(cellSizeM) {
+    const m = Math.max(1, Number(cellSizeM) || 250);
+    if (m <= 120) return 10;
+    if (m <= 250) return 9;
+    if (m <= 600) return 8;
+    if (m <= 1400) return 7;
+    return 6;
+  },
+
+  _guessH3Resolution(feature, fallbackRes = null) {
+    const res = feature?.__h3Res ?? feature?.properties?._hex_res;
+    if (typeof res === 'number') return res;
+    const fromCellM = feature?.properties?._hex_cell_m ?? feature?.properties?._hex_requested_m;
+    if (typeof fromCellM === 'number') return this._h3ResolutionForCellSizeM(fromCellM);
+    if (typeof fallbackRes === 'number') return fallbackRes;
+    const cfgCell = (typeof CONFIG !== 'undefined' && CONFIG?.ISOCHRONE_HEX_CELL_SIZE_M) ? CONFIG.ISOCHRONE_HEX_CELL_SIZE_M : 250;
+    return this._h3ResolutionForCellSizeM(cfgCell);
+  },
+
+  _polyfillFeatureToH3Cells(feature, res) {
+    if (typeof h3 === 'undefined' || !h3.polygonToCells) return null;
+    const geom = feature?.geometry || feature;
+    if (!geom || !geom.type || !Array.isArray(geom.coordinates)) return null;
+    const flag = h3.POLYGON_TO_CELLS_FLAGS?.containmentOverlapping;
+    const fillOne = (loops) => {
+      try {
+        return flag
+          ? h3.polygonToCellsExperimental(loops, res, flag, true)
+          : h3.polygonToCells(loops, res, true);
+      } catch (_) {
+        return [];
+      }
+    };
+    if (geom.type === 'Polygon') return fillOne(geom.coordinates);
+    if (geom.type === 'MultiPolygon') {
+      const set = new Set();
+      for (const poly of geom.coordinates) {
+        for (const c of fillOne(poly)) set.add(c);
+      }
+      return Array.from(set);
+    }
+    return null;
+  },
+
+  _canUseH3FastPathFeature(feature) {
+    if (!feature) return false;
+    if (feature?.__h3Cells?.length && typeof feature?.__h3Res === 'number') return true;
     const props = feature?.properties || {};
-    return props._hex_snapped === true && props._hex_method === 'h3' && typeof props._hex_res === 'number';
+    // Strict H3 marker
+    if (props._hex_snapped === true && props._hex_method === 'h3' && typeof props._hex_res === 'number') return true;
+    // Graceful compatibility: hex-snapped geometry without explicit _hex_method.
+    return props._hex_snapped === true;
+  },
+
+  _isH3HexIsochroneFeature(feature) {
+    return this._canUseH3FastPathFeature(feature);
   },
 
   _getH3CellsForFeature(feature, targetRes) {
     if (typeof h3 === 'undefined') return null;
-    const res = feature?.__h3Res ?? feature?.properties?._hex_res;
+    let res = this._guessH3Resolution(feature, targetRes);
     let cells = feature?.__h3Cells;
+    if (!Array.isArray(cells) || cells.length === 0) {
+      cells = this._polyfillFeatureToH3Cells(feature, res);
+      if (Array.isArray(cells) && cells.length) {
+        feature.__h3Cells = cells;
+        feature.__h3Res = res;
+      }
+    }
     if (!Array.isArray(cells) || cells.length === 0) return null;
     if (typeof targetRes === 'number' && typeof res === 'number' && res > targetRes) {
       // auf gemeinsame gröbere Auflösung runterziehen
@@ -201,11 +277,12 @@ const OverlapRenderer = {
     const buckets = first.buckets != null ? first.buckets : 5;
     const timeLimit = first.time_limit != null ? first.time_limit : 600;
     const maxBucketByIndex = Array.isArray(options.maxBucketByIndex) ? options.maxBucketByIndex : null;
+    const bucketIndexesByStart = savedIsochrones.map(item => this._indexPolygonsByBucket(item.polygons));
 
     // gemeinsame (gröbste) H3-Resolution wählen, damit Starts kompatibel sind
     const resList = [];
-    for (const item of savedIsochrones) {
-      const feat0 = (item.polygons || []).find(f => this._isH3HexIsochroneFeature(f));
+    for (const byBucket of bucketIndexesByStart) {
+      const feat0 = byBucket.get(0);
       const r = feat0?.properties?._hex_res;
       if (typeof r === 'number') resList.push(r);
     }
@@ -214,11 +291,11 @@ const OverlapRenderer = {
 
     // pro Start: kumulative Sets C_b (bis maxBucket) und daraus Ring-Sets R_b + cell->bucket Map
     const perStart = savedIsochrones.map((item, idx) => {
-      const polygons = item.polygons || [];
+      const byBucket = bucketIndexesByStart[idx];
       const maxBucket = Math.max(0, Math.min(buckets - 1, (maxBucketByIndex?.[idx] ?? (buckets - 1))));
       const cumulativeSets = new Array(maxBucket + 1).fill(null);
       for (let b = 0; b <= maxBucket; b++) {
-        const feat = polygons.find(f => (f.properties?.bucket ?? f.bucket) === b);
+        const feat = byBucket.get(b);
         if (!feat || !this._isH3HexIsochroneFeature(feat)) return null;
         const cells = this._getH3CellsForFeature(feat, commonRes);
         if (!cells) return null;
@@ -285,7 +362,8 @@ const OverlapRenderer = {
         bucketIndices: g.bucketIndices,
         timeLabels,
         sumSec,
-        avgSec
+        avgSec,
+        computePath: 'h3'
       });
     }
 
@@ -301,10 +379,14 @@ const OverlapRenderer = {
   computeSystemOptimalCatchments(savedIsochrones, options = {}) {
     // Fast path: Hex/H3 vorhanden -> Set-basierte Partitionierung
     try {
-      const allHaveH3 = Array.isArray(savedIsochrones) && savedIsochrones.length >= 2 && savedIsochrones.every(item => {
-        const p = item.polygons || [];
-        const any = p.find(f => (f.properties?.bucket ?? f.bucket) === 0);
-        return any && this._isH3HexIsochroneFeature(any) && typeof h3 !== 'undefined';
+      const bucketIndexesByStart = Array.isArray(savedIsochrones)
+        ? savedIsochrones.map(item => this._indexPolygonsByBucket(item.polygons))
+        : [];
+      const allHaveH3 = Array.isArray(savedIsochrones) && savedIsochrones.length >= 2 && savedIsochrones.every((item, idx) => {
+        const firstFeature = bucketIndexesByStart[idx]
+          ? Array.from(bucketIndexesByStart[idx].values())[0]
+          : null;
+        return firstFeature && this._isH3HexIsochroneFeature(firstFeature) && typeof h3 !== 'undefined';
       });
       if (allHaveH3) return this.computeSystemOptimalCatchmentsH3(savedIsochrones, options);
     } catch (_) {
@@ -324,6 +406,7 @@ const OverlapRenderer = {
     const buckets = first.buckets != null ? first.buckets : 5;
     const timeLimit = first.time_limit != null ? first.time_limit : 600;
     const maxBucketByIndex = Array.isArray(options.maxBucketByIndex) ? options.maxBucketByIndex : null;
+    const bucketIndexesByStart = savedIsochrones.map(item => this._indexPolygonsByBucket(item.polygons));
 
     const safeDifference = (a, b) => {
       try { return differenceFn(a, b); } catch (_) { return null; }
@@ -335,12 +418,12 @@ const OverlapRenderer = {
     // 1) Pro Start Bucket-Ringe bilden: ring_k = P_k \ P_{k-1}
     // Damit ist die Zeitklasse eindeutig (keine kumulativen Flächen).
     const ringsByStart = savedIsochrones.map((item, idx) => {
-      const polygons = item.polygons || [];
+      const byBucket = bucketIndexesByStart[idx];
       const maxBucket = Math.max(0, Math.min(buckets - 1, (maxBucketByIndex?.[idx] ?? (buckets - 1))));
       const cumulative = [];
       for (let b = 0; b < buckets; b++) {
         if (b > maxBucket) { cumulative[b] = null; continue; }
-        const feat = polygons.find(f => (f.properties?.bucket ?? f.bucket) === b);
+        const feat = byBucket.get(b);
         cumulative[b] = feat ? this._toTurfFeature(feat) : null;
       }
       const rings = [];
@@ -400,7 +483,8 @@ const OverlapRenderer = {
         bucketIndices: p.bucketIndices,
         timeLabels,
         sumSec,
-        avgSec
+        avgSec,
+        computePath: 'turf'
       };
     });
   },

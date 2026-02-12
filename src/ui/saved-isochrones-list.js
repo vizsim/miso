@@ -394,7 +394,9 @@ const SavedIsochronesList = {
     if (index < 0 || index >= saved.length) return;
     saved[index].visible = saved[index].visible === false; // false → true, sonst → false
     State.setSavedIsochrones([...saved]);
-    if (typeof App !== 'undefined' && App._redrawAllSavedIsochrones) {
+    if (typeof App !== 'undefined' && App._toggleSavedIsochroneVisibilityInPlace) {
+      App._toggleSavedIsochroneVisibilityInPlace(index);
+    } else if (typeof App !== 'undefined' && App._redrawAllSavedIsochrones) {
       App._redrawAllSavedIsochrones();
     }
     this.update();
@@ -403,9 +405,12 @@ const SavedIsochronesList = {
   _onRemove(index) {
     const saved = State.getSavedIsochrones();
     if (index < 0 || index >= saved.length) return;
+    const removed = saved[index];
     const next = saved.filter((_, i) => i !== index);
     State.setSavedIsochrones(next);
-    if (typeof App !== 'undefined' && App._redrawAllSavedIsochrones) {
+    if (typeof App !== 'undefined' && App._removeSavedIsochroneRenderAtIndex) {
+      App._removeSavedIsochroneRenderAtIndex(index, removed);
+    } else if (typeof App !== 'undefined' && App._redrawAllSavedIsochrones) {
       App._redrawAllSavedIsochrones();
     }
     this.update();
@@ -417,7 +422,13 @@ const SavedIsochronesList = {
 
   _onClearAll() {
     State.clearSavedIsochrones();
-    MapRenderer.clearIsochrones();
+    if (typeof App !== 'undefined' && App._clearSavedIsochroneRenderState) {
+      App._clearSavedIsochroneRenderState();
+    } else {
+      MapRenderer.clearIsochrones();
+      MapRenderer.clearOverlap();
+      State.setOverlapPolygonLayers([]);
+    }
     if (typeof App !== 'undefined' && App._updateNoTargetHint) {
       App._updateNoTargetHint();
     }

@@ -4,6 +4,14 @@ const App = {
    * Initialisiert die Anwendung
    */
   async init() {
+    this._overlapComputeWorker = null;
+    this._overlapWorkerReqSeq = 1;
+    this._overlapWorkerPending = new Map();
+    this._overlapComputeCache = new Map();
+    this._savedIsochroneGeometryVersionById = {};
+    this._overlapRecomputeRunId = 0;
+    this._lastSystemOptimalConsoleStatus = '';
+
     // Map initialisieren
     MapRenderer.init();
     
@@ -61,11 +69,45 @@ const App = {
     
     this._setupRememberIsochroneStarts();
     this._setupOptimizationOverlap();
+    this._initOverlapComputeWorker();
     
     // Hinweis „Noch kein Ziel“ initial anzeigen/verstecken
     this._updateNoTargetHint();
     // Histogramm-Platzhalter anzeigen (keine Routen)
     Visualization.updateDistanceHistogram([], null, {});
+  },
+
+  _initOverlapComputeWorker() {
+    if (this._overlapComputeWorker) return;
+    if (typeof Worker === 'undefined') return;
+    try {
+      const worker = new Worker('src/workers/overlap-worker.js');
+      worker.onmessage = (event) => {
+        const data = event?.data || {};
+        const pending = this._overlapWorkerPending.get(data.id);
+        if (!pending) return;
+        this._overlapWorkerPending.delete(data.id);
+        if (data.ok) pending.resolve(data.result);
+        else pending.reject(new Error(data.error || 'Worker error'));
+      };
+      worker.onerror = (error) => {
+        const pendings = Array.from(this._overlapWorkerPending.values());
+        this._overlapWorkerPending.clear();
+        pendings.forEach(p => p.reject(error));
+      };
+      this._overlapComputeWorker = worker;
+    } catch (_) {
+      this._overlapComputeWorker = null;
+    }
+  },
+
+  _runOverlapWorkerTask(type, payload) {
+    if (!this._overlapComputeWorker) return Promise.reject(new Error('No overlap worker'));
+    const id = this._overlapWorkerReqSeq++;
+    return new Promise((resolve, reject) => {
+      this._overlapWorkerPending.set(id, { resolve, reject });
+      this._overlapComputeWorker.postMessage({ id, type, payload });
+    });
   },
   
   /**
@@ -105,8 +147,8 @@ const App = {
         if (idx >= 0) {
           saved[idx] = { ...saved[idx], ...result };
           State.setSavedIsochrones([...saved]);
-          // Bestehenden Startpunkt aktualisieren: vollständiges Redraw nötig.
-          this._redrawAllSavedIsochrones();
+          // Bestehenden Startpunkt inkrementell aktualisieren.
+          this._replaceSavedIsochroneRenderAtIndex(idx);
         } else {
           const id = State.getNextIsochroneId();
           State.incrementNextIsochroneId();
@@ -562,6 +604,8 @@ const App = {
         State.clearSavedIsochrones();
         MapRenderer.clearIsochrones();
         MapRenderer.clearOverlap();
+        this._savedIsochroneGeometryVersionById = {};
+        this._overlapComputeCache.clear();
         SavedIsochronesList.update();
         this._updateNoTargetHint();
         const exportBtn = Utils.getElement('#export-btn');
@@ -570,6 +614,50 @@ const App = {
         if (optGroup) optGroup.style.display = 'none';
       }
     });
+  },
+
+  _markIsochroneGeometryChanged(isochroneId) {
+    if (isochroneId == null) return;
+    const cur = Number(this._savedIsochroneGeometryVersionById[isochroneId] || 0);
+    this._savedIsochroneGeometryVersionById[isochroneId] = cur + 1;
+    this._overlapComputeCache.clear();
+  },
+
+  _dropIsochroneGeometryVersion(isochroneId) {
+    if (isochroneId == null) return;
+    delete this._savedIsochroneGeometryVersionById[isochroneId];
+    this._overlapComputeCache.clear();
+  },
+
+  _getSavedIsochroneBatchLayerById(isochroneId) {
+    const layers = State.getIsochronePolygonLayers() || [];
+    return layers.find(layer => layer && layer._isIsochroneBatch === true && layer._savedIsochroneId === isochroneId) || null;
+  },
+
+  _buildOverlapCacheKey(mode, includedSaved, maxBucketByIndex) {
+    const parts = includedSaved.map((item, idx) => {
+      const rev = Number(this._savedIsochroneGeometryVersionById[item.id] || 0);
+      const maxBucket = Array.isArray(maxBucketByIndex) ? Number(maxBucketByIndex[idx]) : -1;
+      return `${item.id}:${rev}:${maxBucket}`;
+    });
+    return `${mode}|${parts.join('|')}`;
+  },
+
+  _setOverlapCacheEntry(key, value) {
+    this._overlapComputeCache.set(key, value);
+    if (this._overlapComputeCache.size > 40) {
+      const oldestKey = this._overlapComputeCache.keys().next().value;
+      this._overlapComputeCache.delete(oldestKey);
+    }
+  },
+
+  _logSystemOptimalComputePath(results, fromCache = false) {
+    const first = Array.isArray(results) && results.length ? results[0] : null;
+    const path = first?.computePath || 'unknown';
+    const msg = `[Systemoptimal] compute path: ${path}${fromCache ? ' (cache hit)' : ''}`;
+    if (msg === this._lastSystemOptimalConsoleStatus) return;
+    this._lastSystemOptimalConsoleStatus = msg;
+    console.info(msg);
   },
 
   /**
@@ -587,7 +675,8 @@ const App = {
     while (currentMarkers.length <= index) currentMarkers.push(null);
 
     if (isVisible) {
-      const newLayers = IsochroneRenderer.drawIsochrones(item);
+      const newLayer = IsochroneRenderer.drawSavedIsochroneBatch(item) || IsochroneRenderer.drawIsochrones(item);
+      const newLayers = newLayer ? (Array.isArray(newLayer) ? newLayer : [newLayer]) : [];
       State.setIsochronePolygonLayers([...currentLayers, ...newLayers]);
       const marker = Visualization.drawIsochroneStartPoint(item.center, {
         index,
@@ -601,37 +690,313 @@ const App = {
       if (marker) marker._isSavedIsochroneCenter = true;
       currentMarkers[index] = marker || null;
       State.setSavedIsochroneMarkers(currentMarkers);
+      this._markIsochroneGeometryChanged(item.id);
     } else {
       State.setIsochronePolygonLayers(currentLayers);
       currentMarkers[index] = null;
       State.setSavedIsochroneMarkers(currentMarkers);
     }
 
-    this._recomputeSavedOverlapIfNeeded();
+    this._recomputeSavedOverlapIfNeeded().catch(() => {});
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
 
-  _recomputeSavedOverlapIfNeeded() {
+  async _recomputeSavedOverlapIfNeeded() {
     MapRenderer.clearOverlap();
     const saved = State.getSavedIsochrones() || [];
     const visibleSaved = saved.filter(item => item.visible !== false);
     const mode = CONFIG.OPTIMIZATION_MODE || 'none';
     if (typeof OverlapRenderer === 'undefined' || visibleSaved.length < 2 || mode === 'none') return;
     const { includedSaved, maxBucketByIndex } = this._getOptimizationSelectionAndBudgets(visibleSaved);
+    const runId = ++this._overlapRecomputeRunId;
+    const cacheKey = this._buildOverlapCacheKey(mode, includedSaved, maxBucketByIndex);
+
+    const drawIfCurrent = (results) => {
+      if (runId !== this._overlapRecomputeRunId) return;
+      if (!results || !results.length) {
+        State.setOverlapPolygonLayers([]);
+        return;
+      }
+      if (mode === 'overlap') {
+        const overlapLayers = OverlapRenderer.drawOverlaps(results);
+        State.setOverlapPolygonLayers(overlapLayers);
+        return;
+      }
+      const overlapLayers = OverlapRenderer.drawSystemOptimalCatchments(results, includedSaved);
+      State.setOverlapPolygonLayers(overlapLayers);
+    };
+
+    if (this._overlapComputeCache.has(cacheKey)) {
+      if (mode === 'system_optimal') {
+        this._logSystemOptimalComputePath(this._overlapComputeCache.get(cacheKey), true);
+      }
+      drawIfCurrent(this._overlapComputeCache.get(cacheKey));
+      return;
+    }
+
     if (mode === 'overlap') {
       if (includedSaved.length >= 2) {
-        const overlapResults = OverlapRenderer.computeOverlapPerBucket(includedSaved);
-        const overlapLayers = OverlapRenderer.drawOverlaps(overlapResults);
-        State.setOverlapPolygonLayers(overlapLayers);
+        let overlapResults = null;
+        try {
+          overlapResults = await this._runOverlapWorkerTask('overlap', { savedIsochrones: includedSaved });
+        } catch (_) {
+          overlapResults = OverlapRenderer.computeOverlapPerBucket(includedSaved);
+        }
+        this._setOverlapCacheEntry(cacheKey, overlapResults || []);
+        drawIfCurrent(overlapResults);
       }
       return;
     }
     if (mode === 'system_optimal' && includedSaved.length >= 2) {
-      const catchmentResults = OverlapRenderer.computeSystemOptimalCatchments(includedSaved, { maxBucketByIndex });
-      const overlapLayers = OverlapRenderer.drawSystemOptimalCatchments(catchmentResults, includedSaved);
-      State.setOverlapPolygonLayers(overlapLayers);
+      let catchmentResults = null;
+      try {
+        catchmentResults = await this._runOverlapWorkerTask('system_optimal', {
+          savedIsochrones: includedSaved,
+          maxBucketByIndex
+        });
+      } catch (_) {
+        catchmentResults = OverlapRenderer.computeSystemOptimalCatchments(includedSaved, { maxBucketByIndex });
+      }
+      this._setOverlapCacheEntry(cacheKey, catchmentResults || []);
+      this._logSystemOptimalComputePath(catchmentResults, false);
+      drawIfCurrent(catchmentResults);
     }
+  },
+
+  _scheduleOverlapRecompute(delayMs = 120) {
+    if (this._overlapRecomputeTimer) clearTimeout(this._overlapRecomputeTimer);
+    this._overlapRecomputeTimer = setTimeout(() => {
+      this._overlapRecomputeTimer = null;
+      this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    }, Math.max(0, delayMs));
+  },
+
+  _updateSavedIsochroneColorInPlace(index, color) {
+    const saved = State.getSavedIsochrones();
+    if (!saved || index < 0 || index >= saved.length) return;
+    const item = saved[index];
+    if (!item) return;
+
+    const layers = State.getIsochronePolygonLayers() || [];
+    layers.forEach(layer => {
+      if (!layer || layer._savedIsochroneId !== item.id) return;
+      if (layer._isIsochroneBatch && typeof layer.setColor === 'function') {
+        layer.setColor(color);
+        return;
+      }
+      const bucket = Number.isFinite(layer._isochroneBucket) ? layer._isochroneBucket : 0;
+      const buckets = Number.isFinite(layer._isochroneBuckets) ? layer._isochroneBuckets : (item.buckets || 1);
+      const style = IsochroneRenderer.getStyleForBucket(bucket, buckets, color);
+      try {
+        layer.setStyle({
+          color: style.lineColor,
+          fillColor: style.fillColor,
+          fillOpacity: style.fillOpacity,
+          opacity: style.strokeOpacity,
+          weight: 2.5
+        });
+      } catch (_) {
+        // ignore style failures for non-styleable layers
+      }
+    });
+
+    const markerRefs = State.getSavedIsochroneMarkers() || [];
+    const oldMarker = markerRefs[index];
+    if (oldMarker) {
+      const layerGroup = State.getLayerGroup();
+      if (layerGroup) layerGroup.removeLayer(oldMarker);
+    }
+    const marker = Visualization.drawIsochroneStartPoint(item.center, {
+      index,
+      color,
+      onDragEnd: (newLatLng) => this._onSavedIsochroneStartPointDragged(index, newLatLng),
+      onSelect: () => {
+        State.setSelectedIsochroneStartKey(index);
+        this.applyIsochroneSelectionHighlight();
+      }
+    });
+    if (marker) marker._isSavedIsochroneCenter = true;
+    while (markerRefs.length <= index) markerRefs.push(null);
+    markerRefs[index] = marker || null;
+    State.setSavedIsochroneMarkers(markerRefs);
+  },
+
+  _replaceSavedIsochroneRenderAtIndex(index) {
+    const saved = State.getSavedIsochrones();
+    if (!saved || index < 0 || index >= saved.length) return;
+    const item = saved[index];
+    if (!item) return;
+    const layerGroup = State.getLayerGroup();
+    if (!layerGroup) return;
+
+    const oldLayers = State.getIsochronePolygonLayers() || [];
+    const keptLayers = [];
+    let targetBatchLayer = null;
+    oldLayers.forEach(layer => {
+      if (layer && layer._savedIsochroneId === item.id) {
+        if (layer._isIsochroneBatch && !targetBatchLayer) {
+          targetBatchLayer = layer;
+        } else {
+          layerGroup.removeLayer(layer);
+        }
+      } else if (layer) {
+        keptLayers.push(layer);
+      }
+    });
+
+    const visible = item.visible !== false;
+    if (visible) {
+      if (targetBatchLayer && typeof targetBatchLayer.setIsochroneData === 'function') {
+        targetBatchLayer.setIsochroneData(item);
+        State.setIsochronePolygonLayers([...keptLayers, targetBatchLayer]);
+      } else {
+        const newLayer = IsochroneRenderer.drawSavedIsochroneBatch(item) || IsochroneRenderer.drawIsochrones(item);
+        const newLayers = newLayer ? (Array.isArray(newLayer) ? newLayer : [newLayer]) : [];
+        State.setIsochronePolygonLayers([...keptLayers, ...newLayers]);
+      }
+      this._markIsochroneGeometryChanged(item.id);
+    } else {
+      if (targetBatchLayer) layerGroup.removeLayer(targetBatchLayer);
+      State.setIsochronePolygonLayers(keptLayers);
+    }
+
+    const markerRefs = State.getSavedIsochroneMarkers() || [];
+    while (markerRefs.length <= index) markerRefs.push(null);
+    const oldMarker = markerRefs[index];
+    if (oldMarker) layerGroup.removeLayer(oldMarker);
+
+    if (visible) {
+      const marker = Visualization.drawIsochroneStartPoint(item.center, {
+        index,
+        color: item.color,
+        onDragEnd: (newLatLng) => this._onSavedIsochroneStartPointDragged(index, newLatLng),
+        onSelect: () => {
+          State.setSelectedIsochroneStartKey(index);
+          this.applyIsochroneSelectionHighlight();
+        }
+      });
+      if (marker) marker._isSavedIsochroneCenter = true;
+      markerRefs[index] = marker || null;
+    } else {
+      markerRefs[index] = null;
+    }
+    State.setSavedIsochroneMarkers(markerRefs);
+
+    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._updateNoTargetHint();
+    this._renderOptimizationAdvancedControls();
+  },
+
+  _removeSavedIsochroneRenderAtIndex(index, removedItem) {
+    const layerGroup = State.getLayerGroup();
+    if (!layerGroup || !removedItem) return;
+
+    const oldLayers = State.getIsochronePolygonLayers() || [];
+    const keptLayers = [];
+    oldLayers.forEach(layer => {
+      if (layer && layer._savedIsochroneId === removedItem.id) {
+        layerGroup.removeLayer(layer);
+      } else if (layer) {
+        keptLayers.push(layer);
+      }
+    });
+    State.setIsochronePolygonLayers(keptLayers);
+
+    const oldMarkers = State.getSavedIsochroneMarkers() || [];
+    oldMarkers.forEach(marker => { if (marker) layerGroup.removeLayer(marker); });
+
+    const saved = State.getSavedIsochrones() || [];
+    const newMarkers = [];
+    saved.forEach((item, i) => {
+      if (item.visible === false) {
+        newMarkers.push(null);
+        return;
+      }
+      const marker = Visualization.drawIsochroneStartPoint(item.center, {
+        index: i,
+        color: item.color,
+        onDragEnd: (newLatLng) => this._onSavedIsochroneStartPointDragged(i, newLatLng),
+        onSelect: () => {
+          State.setSelectedIsochroneStartKey(i);
+          this.applyIsochroneSelectionHighlight();
+        }
+      });
+      if (marker) marker._isSavedIsochroneCenter = true;
+      newMarkers.push(marker || null);
+    });
+    State.setSavedIsochroneMarkers(newMarkers);
+    this._dropIsochroneGeometryVersion(removedItem.id);
+
+    const selected = State.getSelectedIsochroneStartKey();
+    if (typeof selected === 'number') {
+      if (selected === index) State.setSelectedIsochroneStartKey(null);
+      else if (selected > index) State.setSelectedIsochroneStartKey(selected - 1);
+    }
+    this.applyIsochroneSelectionHighlight();
+    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._updateNoTargetHint();
+    this._renderOptimizationAdvancedControls();
+  },
+
+  _toggleSavedIsochroneVisibilityInPlace(index) {
+    const saved = State.getSavedIsochrones();
+    if (!saved || index < 0 || index >= saved.length) return;
+    const item = saved[index];
+    if (!item) return;
+    const layerGroup = State.getLayerGroup();
+    if (!layerGroup) return;
+
+    const oldLayers = State.getIsochronePolygonLayers() || [];
+    const keptLayers = [];
+    oldLayers.forEach(layer => {
+      if (layer && layer._savedIsochroneId === item.id) {
+        layerGroup.removeLayer(layer);
+      } else if (layer) {
+        keptLayers.push(layer);
+      }
+    });
+
+    const markerRefs = State.getSavedIsochroneMarkers() || [];
+    while (markerRefs.length <= index) markerRefs.push(null);
+    const oldMarker = markerRefs[index];
+    if (oldMarker) layerGroup.removeLayer(oldMarker);
+
+    if (item.visible !== false) {
+      const newLayer = IsochroneRenderer.drawSavedIsochroneBatch(item) || IsochroneRenderer.drawIsochrones(item);
+      const newLayers = newLayer ? (Array.isArray(newLayer) ? newLayer : [newLayer]) : [];
+      State.setIsochronePolygonLayers([...keptLayers, ...newLayers]);
+      const marker = Visualization.drawIsochroneStartPoint(item.center, {
+        index,
+        color: item.color,
+        onDragEnd: (newLatLng) => this._onSavedIsochroneStartPointDragged(index, newLatLng),
+        onSelect: () => {
+          State.setSelectedIsochroneStartKey(index);
+          this.applyIsochroneSelectionHighlight();
+        }
+      });
+      if (marker) marker._isSavedIsochroneCenter = true;
+      markerRefs[index] = marker || null;
+    } else {
+      State.setIsochronePolygonLayers(keptLayers);
+      markerRefs[index] = null;
+      const selected = State.getSelectedIsochroneStartKey();
+      if (selected === index) State.setSelectedIsochroneStartKey(null);
+    }
+
+    State.setSavedIsochroneMarkers(markerRefs);
+    this.applyIsochroneSelectionHighlight();
+    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._updateNoTargetHint();
+    this._renderOptimizationAdvancedControls();
+  },
+
+  _clearSavedIsochroneRenderState() {
+    this._savedIsochroneGeometryVersionById = {};
+    this._overlapComputeCache.clear();
+    MapRenderer.clearIsochrones();
+    MapRenderer.clearOverlap();
+    State.setOverlapPolygonLayers([]);
   },
 
   /**
@@ -652,7 +1017,8 @@ const App = {
         markers.push(null);
         return;
       }
-      const layers = IsochroneRenderer.drawIsochrones(item);
+      const layer = IsochroneRenderer.drawSavedIsochroneBatch(item) || IsochroneRenderer.drawIsochrones(item);
+      const layers = layer ? (Array.isArray(layer) ? layer : [layer]) : [];
       allLayers.push(...layers);
       const marker = Visualization.drawIsochroneStartPoint(item.center, {
         index,
@@ -665,10 +1031,11 @@ const App = {
       });
       marker._isSavedIsochroneCenter = true;
       markers.push(marker);
+      this._markIsochroneGeometryChanged(item.id);
     });
     State.setIsochronePolygonLayers(allLayers);
     State.setSavedIsochroneMarkers(markers);
-    this._recomputeSavedOverlapIfNeeded();
+    this._recomputeSavedOverlapIfNeeded().catch(() => {});
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
@@ -685,11 +1052,10 @@ const App = {
     if (['none', 'overlap', 'system_optimal'].includes(mode)) select.value = mode;
     select.addEventListener('change', () => {
       CONFIG.OPTIMIZATION_MODE = select.value;
-      if (CONFIG.OPTIMIZATION_MODE !== 'none') {
-        const saved = State.getSavedIsochrones();
-        if (saved && saved.length >= 2) this._redrawAllSavedIsochrones();
-      } else {
+      if (CONFIG.OPTIMIZATION_MODE === 'none') {
         MapRenderer.clearOverlap();
+      } else {
+        this._scheduleOverlapRecompute(0);
       }
       this._renderOptimizationAdvancedControls();
     });
@@ -709,7 +1075,7 @@ const App = {
         s.linkBudgets = !!cbLink.checked;
         State.setOptimizationSettings(s);
         this._renderOptimizationAdvancedControls();
-        this._redrawAllSavedIsochrones();
+        this._scheduleOverlapRecompute(0);
       });
     }
     if (globalRange) {
@@ -723,9 +1089,10 @@ const App = {
         State.setOptimizationSettings(s);
         this._updateOptimizationGlobalBudgetLabel(globalLabel, s.globalMaxBucket, (State.getSavedIsochrones() || [])[0]);
         this._renderOptimizationAdvancedControls();
+        if ((CONFIG.OPTIMIZATION_MODE || 'none') !== 'none') this._scheduleOverlapRecompute(120);
       });
       globalRange.addEventListener('change', () => {
-        if ((CONFIG.OPTIMIZATION_MODE || 'none') !== 'none') this._redrawAllSavedIsochrones();
+        if ((CONFIG.OPTIMIZATION_MODE || 'none') !== 'none') this._scheduleOverlapRecompute(0);
       });
     }
     if (btnReset) {
@@ -737,7 +1104,7 @@ const App = {
           maxBucketByIsochroneId: {}
         });
         this._renderOptimizationAdvancedControls();
-        this._redrawAllSavedIsochrones();
+        this._scheduleOverlapRecompute(0);
       });
     }
     if (btnEnforce) {
@@ -855,7 +1222,7 @@ const App = {
         if (el.checked) set.add(isoId); else set.delete(isoId);
         s.includedIsochroneIds = Array.from(set);
         State.setOptimizationSettings(s);
-        this._redrawAllSavedIsochrones();
+        this._scheduleOverlapRecompute(0);
       });
     });
     startsContainer.querySelectorAll('input[data-opt-budget="1"]').forEach(el => {
@@ -872,7 +1239,7 @@ const App = {
         if (labelEl) labelEl.textContent = lbl;
       });
       el.addEventListener('change', () => {
-        this._redrawAllSavedIsochrones();
+        this._scheduleOverlapRecompute(0);
       });
     });
 
@@ -1033,7 +1400,7 @@ const App = {
     State.setOptimizationSettings(s);
     if (statusEl) statusEl.textContent = `Overlap gefunden nach ${iter} Schritt(en).`;
     this._renderOptimizationAdvancedControls();
-    this._redrawAllSavedIsochrones();
+    this._recomputeSavedOverlapIfNeeded().catch(() => {});
   },
 
   /**
@@ -1415,6 +1782,24 @@ const App = {
     const center = newCenter && !isNaN(newCenter[0]) && !isNaN(newCenter[1])
       ? newCenter
       : (item.center.slice ? item.center.slice() : [item.center[0], item.center[1]]);
+    const color = (config.color != null && /^#[0-9a-fA-F]{6}$/.test(config.color)) ? config.color : (item.color || '#3388ff');
+
+    const sameCenter = !!item.center && Math.abs(item.center[0] - center[0]) < 1e-10 && Math.abs(item.center[1] - center[1]) < 1e-10;
+    const sameTime = Number(item.time_limit) === Number(config.time_limit);
+    const sameBuckets = Number(item.buckets) === Number(config.buckets);
+    const sameProfile = String(item.profile || '') === String(config.profile || '');
+    const onlyColorChanged = sameCenter && sameTime && sameBuckets && sameProfile && color !== (item.color || '#3388ff');
+
+    if (onlyColorChanged) {
+      const savedNow = State.getSavedIsochrones();
+      if (!savedNow || i >= savedNow.length) return;
+      savedNow[i] = { ...savedNow[i], color };
+      State.setSavedIsochrones([...savedNow]);
+      this._updateSavedIsochroneColorInPlace(i, color);
+      SavedIsochronesList.update();
+      return;
+    }
+
     Utils.showInfo('Isochrone wird neu berechnet…', false);
     const result = await IsochroneService.fetchIsochrone(center, {
       time_limit: config.time_limit,
@@ -1426,10 +1811,9 @@ const App = {
     if (!result) return;
     const savedNow = State.getSavedIsochrones();
     if (!savedNow || i >= savedNow.length) return;
-    const color = (config.color != null && /^#[0-9a-fA-F]{6}$/.test(config.color)) ? config.color : (savedNow[i].color || '#3388ff');
     savedNow[i] = { ...savedNow[i], id: savedNow[i].id, visible: savedNow[i].visible, center: center, polygons: result.polygons, time_limit: result.time_limit, buckets: result.buckets, profile: result.profile, color };
     State.setSavedIsochrones([...savedNow]);
-    this._redrawAllSavedIsochrones();
+    this._replaceSavedIsochroneRenderAtIndex(i);
     SavedIsochronesList.update();
   },
 
@@ -1452,7 +1836,7 @@ const App = {
     if (result) {
       saved[index] = { ...saved[index], center, polygons: result.polygons, time_limit: result.time_limit, buckets: result.buckets, profile: result.profile };
       State.setSavedIsochrones([...saved]);
-      this._redrawAllSavedIsochrones();
+      this._replaceSavedIsochroneRenderAtIndex(index);
       SavedIsochronesList.update();
     }
   },

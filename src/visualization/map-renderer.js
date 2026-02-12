@@ -33,13 +33,11 @@ class MLLayerGroup {
         layer._addToRenderer(this._renderer);
       } catch (err) {
         this._layers.delete(layer);
-        console.error('[ML DEBUG] addLayer failed', {
-          layerId: layer && layer._id,
-          sourceId: layer && layer._sourceId,
-          lineLayerId: layer && layer._lineLayerId,
-          fillLayerId: layer && layer._fillLayerId,
-          error: err?.message || String(err)
-        }, err);
+        if (typeof Utils !== 'undefined' && typeof Utils.logError === 'function') {
+          Utils.logError('Layer konnte nicht zur Karte hinzugefügt werden.', err);
+        } else {
+          console.error('Layer konnte nicht zur Karte hinzugefügt werden.', err);
+        }
       }
     }
     return layer;
