@@ -6,6 +6,7 @@
   <title>miso – where isochrones meet</title>
   <link rel="icon" type="image/svg+xml" href="miso_logo.svg" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.18.0/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -36,59 +37,6 @@
     <div class="panel-section">
       <section class="config-block" aria-labelledby="block-einstellungen-heading">
         <h4 id="block-einstellungen-heading" class="config-block-title">Einstellungen</h4>
-        <div class="config-group">
-          <div class="switch-toggle">
-            <label for="config-remember-isochrone-starts">
-              <input type="checkbox" id="config-remember-isochrone-starts" />
-              <span class="switch-slider"></span>
-              <span class="switch-text">Startpunkte merken</span>
-            </label>
-          </div>
-        </div>
-        <div class="config-group" id="saved-isochrones-list-group" style="display: none;">
-          <label>Gespeicherte Startpunkte:</label>
-          <div id="saved-isochrones-list" class="targets-list"></div>
-          <button type="button" id="saved-isochrones-clear-all" class="export-button" style="margin-top: 6px;">Alle löschen</button>
-        </div>
-        <div class="config-group" id="isochrone-params-group">
-          <div class="config-field-half" style="margin-bottom: 8px;">
-            <label for="config-isochrone-bucket-size">Bucket-Größe (Min.):</label>
-            <select id="config-isochrone-bucket-size">
-              <option value="1">1 min</option>
-              <option value="2">2 min</option>
-              <option value="3">3 min</option>
-              <option value="5" selected>5 min</option>
-              <option value="10">10 min</option>
-            </select>
-          </div>
-          <div class="config-field-half">
-            <label for="config-isochrone-time">Zeitlimit (Min.):</label>
-            <input type="number" id="config-isochrone-time" min="5" max="120" step="5" value="10" />
-          </div>
-          <div class="config-group" style="margin-top: 10px;">
-            <div class="switch-toggle switch-toggle-small" style="margin-bottom: 6px;">
-              <label for="config-isochrone-hex-snap">
-                <input type="checkbox" id="config-isochrone-hex-snap" />
-                <span class="switch-slider"></span>
-                <span class="switch-text">Isochronen auf Hex-Raster vereinfachen</span>
-              </label>
-            </div>
-            <label for="config-isochrone-hex-size">Hex-Detailgrad</label>
-            <select id="config-isochrone-hex-size">
-              <option value="100" selected>Sehr fein (100 m)</option>
-              <option value="250">Fein (250 m)</option>
-              <option value="500">Mittel (500 m)</option>
-              <option value="1000">Grob (1000 m)</option>
-            </select>
-            <p class="config-hint" style="font-size: 11px; color: #666; margin-top: 4px;">
-              Hilft v. a. bei Städten: weniger Polygon-Punkte → Turf-Operationen schneller. Kleinere Hexe = mehr Detail, aber langsamer.
-              Wenn es zu viele Zellen werden, wird automatisch grober gerastert.
-            </p>
-          </div>
-        </div>
-        <div class="config-group">
-          <button type="button" id="btn-calculate-isochrone" class="btn-calculate-isochrone">Isochronen berechnen</button>
-        </div>
         <div class="config-group">
           <label>Profil:</label>
           <div class="profile-buttons">
@@ -133,6 +81,103 @@
           </button>
         </div>
         </div>
+
+        <!-- Transit-Info-Panel (nur bei Transit-Profil sichtbar) -->
+        <div id="transit-info-panel" class="config-group" style="display: none; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #3388ff;">
+          <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
+            <strong style="color: #333;">🚆 Transit-Parameter</strong>
+          </div>
+          <div style="font-size: 11px; color: #555; line-height: 1.6;">
+            <div style="margin-bottom: 6px;">
+              <label for="transit-departure-time" style="display: block; margin-bottom: 3px;"><strong>Abfahrtszeit:</strong></label>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="text" id="transit-departure-time" placeholder="Datum und Uhrzeit wählen..." style="flex: 1; padding: 6px 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: white;" readonly />
+                <button type="button" id="transit-time-now-btn" title="Auf aktuelle Zeit setzen" style="padding: 6px 10px; font-size: 11px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; white-space: nowrap;">Jetzt</button>
+              </div>
+            </div>
+            <div style="margin-bottom: 4px;">
+              <strong>Max. Umstiege:</strong> <span id="transit-max-transfers">14</span>
+            </div>
+            <div style="margin-bottom: 4px;">
+              <strong>Vor-/Nachweg:</strong> <span id="transit-walk-time">je 15 Min. zu Fuß</span>
+            </div>
+          </div>
+          <p class="config-hint" style="font-size: 10px; color: #888; margin-top: 6px; margin-bottom: 0;">
+            Powered by <a href="https://transitous.org" target="_blank" rel="noopener" style="color: #3388ff;">Transitous</a> / <a href="https://motis-project.de" target="_blank" rel="noopener" style="color: #3388ff;">MOTIS</a>
+          </p>
+        </div>
+
+        <!-- Zeitlimit und Bucket-Größe (kompakt) -->
+        <div class="config-group-inline" id="isochrone-params-group" style="margin-bottom: 16px;">
+          <div class="config-field-half">
+            <label for="config-isochrone-time">Zeitlimit:</label>
+            <input type="number" id="config-isochrone-time" min="5" max="120" step="5" value="10" />
+          </div>
+          <div class="config-field-half">
+            <label for="config-isochrone-bucket-size">Bucket-Größe:</label>
+            <select id="config-isochrone-bucket-size">
+              <option value="5" selected>5 min</option>
+              <option value="10">10 min</option>
+              <option value="20">20 min</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="config-group button-row-with-actions">
+          <button type="button" id="btn-calculate-isochrone" class="btn-calculate-isochrone">Isochronen berechnen</button>
+          <button type="button" id="export-btn" class="icon-action-btn" title="Isochrone als GeoJSON exportieren" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="config-group">
+          <div class="switch-toggle">
+            <label for="config-remember-isochrone-starts">
+              <input type="checkbox" id="config-remember-isochrone-starts" />
+              <span class="switch-slider"></span>
+              <span class="switch-text">Startpunkte merken</span>
+            </label>
+          </div>
+        </div>
+        <div class="config-group" id="saved-isochrones-list-group" style="display: none;">
+          <label>Gespeicherte Startpunkte:</label>
+          <div id="saved-isochrones-list" class="targets-list"></div>
+          <button type="button" id="saved-isochrones-clear-all" class="export-button" style="margin-top: 6px;">Alle löschen</button>
+        </div>
+
+        <!-- Hex-Raster-Vereinfachung -->
+        <div class="config-group hex-snap-group">
+          <div class="hex-snap-header">
+            <span class="hex-snap-title">Hex-Raster</span>
+            <span class="info-hint">
+              <span class="info-hint-icon">ⓘ</span>
+              <span class="info-hint-text">
+                Hilft v. a. bei Städten: weniger Polygon-Punkte → Turf-Operationen schneller. Kleinere Hexe = mehr Detail, aber langsamer. Wenn es zu viele Zellen werden, wird automatisch grober gerastert.
+              </span>
+            </span>
+          </div>
+          <div class="hex-snap-controls">
+            <div class="switch-toggle switch-toggle-small">
+              <label for="config-isochrone-hex-snap">
+                <input type="checkbox" id="config-isochrone-hex-snap" />
+                <span class="switch-slider"></span>
+                <span class="switch-text">Vereinfachen</span>
+              </label>
+            </div>
+            <div class="hex-size-control">
+              <select id="config-isochrone-hex-size">
+                <option value="100" selected>Sehr fein (100 m)</option>
+                <option value="250">Fein (250 m)</option>
+                <option value="500">Mittel (500 m)</option>
+                <option value="1000">Grob (1000 m)</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="config-block" aria-labelledby="block-optimierung-heading">
@@ -165,7 +210,6 @@
             <div id="optimization-starts-container" style="margin-top: 10px;"></div>
 
             <div class="optimization-buttons" style="margin-top: 10px;">
-              <button type="button" id="optimization-enforce-overlap" class="export-button">Overlap erzwingen</button>
               <button type="button" id="optimization-add-buckets" class="export-button">Mehr Buckets (+1)</button>
               <button type="button" id="optimization-reset-budgets" class="export-button">Reset</button>
             </div>
@@ -174,13 +218,12 @@
         </div>
       </section>
 
-      <section class="config-block" aria-labelledby="block-darstellung-heading">
-        <h4 id="block-darstellung-heading" class="config-block-title">Export</h4>
-        <div class="config-group config-group-export">
-          <button id="export-btn" class="export-button" disabled>Isochrone als GeoJSON exportieren</button>
-        </div>
-      </section>
-
+      <div class="api-credits" style="font-size: 11px; color: #888; text-align: center; line-height: 1.6; padding-top: 15px; border-top: 1px solid #eee;">
+        Routing: <a href="https://www.graphhopper.com/open-source/" target="_blank" rel="noopener" style="color: #888; text-decoration: none;">GraphHopper</a> • 
+        <a href="https://transitous.org" target="_blank" rel="noopener" style="color: #888; text-decoration: none;">Transitous</a> / 
+        <a href="https://motis-project.de" target="_blank" rel="noopener" style="color: #888; text-decoration: none;">MOTIS</a>
+      </div>
+      
       <div class="github-links">
         <img src="https://img.shields.io/badge/Status-Experimental-red" alt="Status: Experimental" class="status-badge">
         <div style="flex: 1;"></div>
@@ -292,11 +335,9 @@
         <div class="config-group" style="margin-bottom: 10px;">
           <label for="edit-isochrone-bucket-size">Bucket-Größe (Min.):</label>
           <select id="edit-isochrone-bucket-size">
-            <option value="1">1 min</option>
-            <option value="2">2 min</option>
-            <option value="3">3 min</option>
             <option value="5" selected>5 min</option>
             <option value="10">10 min</option>
+            <option value="20">20 min</option>
           </select>
         </div>
         <div class="config-group" style="margin-bottom: 10px;">
@@ -372,6 +413,8 @@
   <script src="https://unpkg.com/h3-js@4.4.0/dist/h3-js.umd.js"></script>
   <script src="https://unpkg.com/pbf@3.2.1/dist/pbf.js"></script>
   <script src="https://unpkg.com/pmtiles@3.0.2/dist/pmtiles.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/de.js"></script>
   
   <!-- Core -->
   <script src="src/shared/core/utils.js"></script>

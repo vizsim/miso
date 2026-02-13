@@ -215,6 +215,11 @@ const App = {
     EventBus.on(Events.ISOCHRONE_CALCULATING, (data) => {
       this._isochroneCalculating = !!data.active;
       this._updateCalculateIsochroneButton();
+      
+      // Transit-Panel aktualisieren (Abfahrtszeit wird bei jeder Berechnung neu gesetzt)
+      if (data.active && CONFIG.PROFILE === 'transit') {
+        ConfigSetupHandlers.updateTransitInfoPanel();
+      }
     });
 
     // Isochrone berechnet

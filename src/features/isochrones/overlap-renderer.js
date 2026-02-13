@@ -6,6 +6,9 @@ const OVERLAP_WEIGHT = 2;
 const DEFAULT_CATCHMENT_COLOR = '#3388ff';
 const CATCHMENT_FILL_OPACITY = 0.25;
 const CATCHMENT_WEIGHT = 2;
+const SYSTEM_OPTIMAL_TOP_FRACTION = 0.30;
+const SYSTEM_OPTIMAL_LARGE_AREA_M2 = 15 * 1000 * 1000; // 15 km²
+const SYSTEM_OPTIMAL_MIN_SEGMENTS_FOR_TRIM = 8;
 
 const OverlapRenderer = {
   /**
@@ -508,8 +511,16 @@ const OverlapRenderer = {
     const layerGroup = State.getLayerGroup();
     if (!layerGroup || !catchmentResults || catchmentResults.length === 0) return [];
 
+    let resultsToRender = catchmentResults;
+    if (this._shouldTrimSystemOptimalResults(catchmentResults)) {
+      const keepCount = Math.max(1, Math.ceil(catchmentResults.length * SYSTEM_OPTIMAL_TOP_FRACTION));
+      resultsToRender = [...catchmentResults]
+        .sort((a, b) => a.sumSec - b.sumSec) // niedrigere Summe = besser
+        .slice(0, keepCount);
+    }
+
     const layers = [];
-    const sums = catchmentResults.map(r => r.sumSec);
+    const sums = resultsToRender.map(r => r.sumSec);
     const minSum = Math.min(...sums);
     const maxSum = Math.max(...sums);
     const denom = Math.max(1e-9, (maxSum - minSum));
@@ -523,7 +534,7 @@ const OverlapRenderer = {
     };
 
     // Gute Bereiche oben zeichnen (kleinere Summe zuletzt → oben)
-    const sorted = [...catchmentResults].sort((a, b) => b.sumSec - a.sumSec);
+    const sorted = [...resultsToRender].sort((a, b) => b.sumSec - a.sumSec);
 
     sorted.forEach((res) => {
       const { feature, sumSec, avgSec, timeLabels } = res;
@@ -639,6 +650,22 @@ const OverlapRenderer = {
       }
     });
     return layers;
+  },
+
+  _getFeatureAreaM2(feature) {
+    if (!feature || typeof turf === 'undefined' || typeof turf.area !== 'function') return 0;
+    try {
+      const area = turf.area(feature);
+      return Number.isFinite(area) && area > 0 ? area : 0;
+    } catch (_) {
+      return 0;
+    }
+  },
+
+  _shouldTrimSystemOptimalResults(catchmentResults) {
+    if (!Array.isArray(catchmentResults) || catchmentResults.length < SYSTEM_OPTIMAL_MIN_SEGMENTS_FOR_TRIM) return false;
+    const totalArea = catchmentResults.reduce((acc, item) => acc + this._getFeatureAreaM2(item?.feature), 0);
+    return totalArea >= SYSTEM_OPTIMAL_LARGE_AREA_M2;
   }
 };
 

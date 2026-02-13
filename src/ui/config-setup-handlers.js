@@ -1,5 +1,81 @@
 // ==== Config Setup Handlers (aus App ausgelagert) ====
 const ConfigSetupHandlers = {
+  /**
+   * Aktualisiert das Transit-Info-Panel (Sichtbarkeit + Abfahrtszeit)
+   */
+  updateTransitInfoPanel() {
+    const panel = Utils.getElement('#transit-info-panel');
+    if (!panel) return;
+
+    const isTransit = CONFIG.PROFILE === 'transit';
+    panel.style.display = isTransit ? 'block' : 'none';
+
+    if (isTransit) {
+      const departureTimeInput = Utils.getElement('#transit-departure-time');
+      
+      // Initialisiere Flatpickr, falls noch nicht geschehen
+      if (departureTimeInput && !departureTimeInput._flatpickr) {
+        const now = new Date();
+        
+        departureTimeInput._flatpickr = flatpickr(departureTimeInput, {
+          enableTime: true,
+          time_24hr: true,
+          dateFormat: "d.m.Y, H:i",
+          defaultDate: now,
+          locale: "de",
+          allowInput: true,
+          minuteIncrement: 5,
+          clickOpens: true
+        });
+        
+        // "Jetzt"-Button Event-Listener
+        const nowBtn = Utils.getElement('#transit-time-now-btn');
+        if (nowBtn && !nowBtn._listenerAdded) {
+          nowBtn.addEventListener('click', () => {
+            if (departureTimeInput._flatpickr) {
+              departureTimeInput._flatpickr.setDate(new Date(), true);
+            }
+          });
+          nowBtn._listenerAdded = true;
+        }
+      }
+
+      // Max. Umstiege aktualisieren
+      const maxTransfersEl = Utils.getElement('#transit-max-transfers');
+      if (maxTransfersEl) {
+        maxTransfersEl.textContent = CONFIG.TRANSITOUS_MAX_TRANSFERS || 14;
+      }
+    }
+  },
+  
+  /**
+   * Gibt die gewählte Transit-Abfahrtszeit als Date-Objekt zurück
+   * @returns {Date} - Die gewählte Zeit oder aktuelle Zeit als Fallback
+   */
+  getTransitDepartureTime() {
+    const departureTimeInput = Utils.getElement('#transit-departure-time');
+    
+    // Versuche zuerst das Datum aus Flatpickr zu holen
+    if (departureTimeInput && departureTimeInput._flatpickr) {
+      const selectedDates = departureTimeInput._flatpickr.selectedDates;
+      if (selectedDates && selectedDates.length > 0) {
+        return selectedDates[0];
+      }
+    }
+    
+    // Fallback: versuche das Feld zu parsen
+    if (departureTimeInput && departureTimeInput.value) {
+      // Deutsches Format: dd.mm.yyyy, HH:MM
+      const match = departureTimeInput.value.match(/(\d{1,2})\.(\d{1,2})\.(\d{4}),?\s*(\d{1,2}):(\d{2})/);
+      if (match) {
+        const [, day, month, year, hours, minutes] = match;
+        return new Date(year, month - 1, day, hours, minutes);
+      }
+    }
+    
+    return new Date(); // Fallback: aktuelle Zeit
+  },
+
   setupProfileButtons(app) {
     const profileBtns = Utils.getElements('.profile-btn:not(.edit-profile-btn)');
     if (!profileBtns || profileBtns.length === 0) return;
@@ -12,6 +88,9 @@ const ConfigSetupHandlers = {
       }
     });
 
+    // Initial Transit-Panel-Status setzen
+    this.updateTransitInfoPanel();
+
     profileBtns.forEach(btn => {
       btn.addEventListener('click', async () => {
         profileBtns.forEach(b => b.classList.remove('active'));
@@ -21,6 +100,9 @@ const ConfigSetupHandlers = {
         if (typeof updateConfigFromUI !== 'function') {
           CONFIG.PROFILE = btn.dataset.profile || CONFIG.PROFILE;
         }
+
+        // Transit-Panel aktualisieren
+        ConfigSetupHandlers.updateTransitInfoPanel();
 
         const selectedIndex = State.getSelectedTargetIndex();
         if (selectedIndex !== null && isRememberMode()) {

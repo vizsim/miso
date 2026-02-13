@@ -323,10 +323,16 @@ const API = {
   },
 
   _buildTransitousParams(point, maxTravelTimeMin) {
+    // Hole die gewählte Abfahrtszeit aus dem UI (falls verfügbar)
+    let departureTime = new Date();
+    if (typeof ConfigSetupHandlers !== 'undefined' && ConfigSetupHandlers.getTransitDepartureTime) {
+      departureTime = ConfigSetupHandlers.getTransitDepartureTime();
+    }
+    
     return new URLSearchParams({
       one: `${point[0]},${point[1]}`,
       maxTravelTime: String(maxTravelTimeMin),
-      time: new Date().toISOString(),
+      time: departureTime.toISOString(),
       transitModes: this._getTransitModes().join(','),
       maxTransfers: String(CONFIG.TRANSITOUS_MAX_TRANSFERS ?? 14),
       arriveBy: 'false',
