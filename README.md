@@ -1,6 +1,6 @@
 # Miso – Isochronen
 
-Web-Anwendung zur Berechnung und Darstellung von **Isochronen** (Erreichbarkeitsflächen) auf einer Karte. Nutzt GraphHopper (Straßenprofile), Transitous one-to-all (ÖPNV, approximiert) und OpenStreetMap (Overpass) für POI-Suchen.
+Web-Anwendung zur Berechnung und Darstellung von **Isochronen** (Erreichbarkeitsflächen) auf einer Karte mit **MapLibre GL JS**. Nutzt GraphHopper (Straßenprofile), Transitous one-to-all (ÖPNV, approximiert) und OpenStreetMap (Overpass) für POI-Suchen.
 
 ## Features
 
@@ -109,6 +109,7 @@ miso/
 ## Technologie-Stack
 
 - **MapLibre GL JS**: Karte, Marker, Polygone, Popups
+- **H3 (h3-js)**: Hex-Raster / Hex-Snapping für Isochrone-Geometrie
 - **GraphHopper API**: Isochrone-Endpunkt (Fuß/Fahrrad/Auto)
 - **Transitous API**: one-to-all Endpunkt für ÖPNV (Approximation via Buffer/Union im Browser)
 - **Overpass API**: POI-Abfragen (Cafés, Restaurants, Bars/Kneipen)
