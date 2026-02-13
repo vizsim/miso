@@ -5,7 +5,7 @@ Web-Anwendung zur Berechnung und Darstellung von **Isochronen** (Erreichbarkeits
 ## Features
 
 - **Isochronen berechnen**: Klick auf die Karte setzt einen Startpunkt und berechnet die Erreichbarkeit (Fuß, Fahrrad, Auto, ÖPNV) in konfigurierbaren Zeitstufen.
-- **Bucket-Größe & Zeitlimit**: Zeitintervalle z. B. 5 Min – Zeitlimit nur in diesen Schritten (5, 10, 15 … Min). Bucket-Größen: 1, 2, 3, 5 oder 10 Minuten.
+- **Bucket-Größe & Zeitlimit**: Zeitintervalle z. B. 5 Min – Zeitlimit nur in diesen Schritten (5, 10, 15 … Min). Bucket-Größen: 5, 10 oder 20 Minuten.
 - **Startpunkte merken**: Mehrere Isochronen speichern, einzeln ein-/ausblenden, bearbeiten, verschieben.
 - **Farbe pro Startpunkt**: Jeder gespeicherte Startpunkt kann eine eigene Hauptfarbe haben (z. B. Blau, Rot, Grün); Darstellung innen kräftig, nach außen abnehmend.
 - **Überlappungsflächen**: Optional Anzeige der Flächen, die von allen sichtbaren Startpunkten innerhalb derselben Zeit erreichbar sind.
@@ -17,9 +17,9 @@ Web-Anwendung zur Berechnung und Darstellung von **Isochronen** (Erreichbarkeits
 
 ## Verwendung
 
-1. **Startpunkt setzen**: Einmal in die Karte klicken → Isochrone wird um den Klickpunkt berechnet (Standard: 10 Min, 5-Minuten-Buckets, Profil „Fuß“).
+1. **Startpunkt setzen**: Einmal in die Karte klicken → Isochrone wird um den Klickpunkt berechnet (Standard: 10 Min, 5‑Minuten‑Buckets; Profil gemäß CONFIG, z. B. „bike“).
 2. **Einstellungen** (linkes Panel):
-   - **Bucket-Größe (Min.)**: 1, 2, 3, 5 oder 10 – legt die Zeitstufen und die Schrittweite für das Zeitlimit fest.
+   - **Bucket-Größe (Min.)**: 5, 10 oder 20 – legt die Zeitstufen und die Schrittweite für das Zeitlimit fest.
    - **Zeitlimit (Min.)**: Nur Vielfache der Bucket-Größe (z. B. bei 5 Min: 5, 10, 15, …).
    - **Profil**: Fuß, Fahrrad, Auto oder ÖPNV (Transitous/Motis).
    - **Startpunkte merken**: An → weitere Klicks/Kalkulationen werden als zusätzliche Isochronen gespeichert (Liste mit S1, S2, …).
@@ -58,58 +58,57 @@ miso/
 ├── index.html              # Einstiegsseite & Kontextmenüs
 ├── style.css               # Layout & Komponenten
 ├── README.md
-├── LICENSE                 # MIT
+├── LICENSE                 # AGPL-3.0
 ├── miso_logo.svg           # Logo
 │
 ├── docs/                   # Doku
-│   └── ...
+│   └── OPEN_TODOS.md       # Offene TODOs
 │
 └── src/
     ├── app.js              # App-Initialisierung, Event-Handler, Isochrone-Logik
     │
-    ├── core/
-    │   └── config.js       # CONFIG (inkl. POPULATION_PMTILES_URL)
+   ├── core/
+   │   └── config.js       # CONFIG (inkl. POPULATION_PMTILES_URL)
     │
     ├── shared/
     │   ├── core/           # state, events, utils
     │   └── domain/         # api, geo, distribution
     │
-    ├── services/           # verbleibende Querschnittsservices
+   ├── services/           # verbleibende Querschnittsservices
     │   ├── aggregation-service.js
     │   ├── export-service.js
     │   └── target-service.js
     │
-    ├── features/
-    │   ├── routing/        # route-service, route-renderer, route-handler, route-warning
-    │   ├── isochrones/     # isochrone-service, isochrone-renderer, overlap-renderer
-    │   ├── population/     # population-service (PMTiles)
-    │   └── pois/           # overpass-service, poi-renderer
+   ├── features/
+   │   ├── routing/        # route-service, route-renderer, route-handler, route-warning
+   │   ├── isochrones/     # isochrone-service, isochrone-renderer, overlap-renderer, overlap-controller,
+   │   │                   # saved-isochrone-controller, isochrone-params
+   │   ├── population/     # population-service (PMTiles)
+   │   └── pois/           # overpass-service, poi-renderer
     │
-    ├── visualization/
-    │   ├── visualization.js      # Orchestrierung (Startpunkte, Marker, …)
-    │   ├── map-renderer.js       # Karte, Kontextmenü, POI-Suche, clearLayers
-    │   ├── isochrone-renderer.js # Isochrone-Polygone (Farbe, Buckets)
-    │   ├── overlap-renderer.js   # Überlappungsflächen (Turf.js)
-    │   ├── poi-renderer.js       # Cafés, Restaurants, Bars (Marker)
-    │   ├── marker-manager.js
-    │   ├── route-renderer.js
-    │   ├── colormap-utils.js
-    │   └── histogram-renderer.js
+   ├── visualization/
+   │   ├── visualization.js      # Orchestrierung (Startpunkte, Marker, …)
+   │   ├── map-renderer.js       # Karte, Kontextmenü, clearLayers
+   │   ├── marker-manager.js
+   │   ├── colormap-utils.js
+   │   └── histogram-renderer.js
     │
-    ├── ui/                 # UI-Komponenten (ohne Routing-Warnung)
-    │   ├── saved-isochrones-list.js  # Liste „Gespeicherte Startpunkte“, Edit-Modal, Farbwahl
-    │   ├── targets-list.js
-    │   ├── config-helpers.js
-    │   ├── distribution-selector.js
-    │   └── colormap-selector.js
+   ├── ui/                 # UI-Komponenten (ohne Routing-Warnung)
+   │   ├── saved-isochrones-list.js  # Liste „Gespeicherte Startpunkte“, Edit-Modal, Farbwahl
+   │   ├── targets-list.js
+   │   ├── config-helpers.js
+   │   ├── config-setup-handlers.js
+   │   ├── distribution-selector.js
+   │   └── colormap-selector.js
     │
-    └── utils/
-        └── geocoder.js     # Adresssuche
+   └── utils/
+      ├── async-helpers.js # Async-Utilities
+      └── geocoder.js      # Adresssuche
 ```
 
 ## Technologie-Stack
 
-- **Leaflet.js**: Karte, Marker, Polygone, Popups
+- **MapLibre GL JS**: Karte, Marker, Polygone, Popups
 - **GraphHopper API**: Isochrone-Endpunkt (Fuß/Fahrrad/Auto)
 - **Transitous API**: one-to-all Endpunkt für ÖPNV (Approximation via Buffer/Union im Browser)
 - **Overpass API**: POI-Abfragen (Cafés, Restaurants, Bars/Kneipen)
@@ -127,9 +126,9 @@ CONFIG = {
   TRANSITOUS_ONE_TO_ALL_URL: "/transitous/api/v1/one-to-all", // ÖPNV one-to-all (Proxy empfohlen)
   TRANSIT_PROFILE_ENABLED: true,      // ÖPNV-Profil global an/aus
   TRANSIT_PROFILE_AUTO_DISABLE_ON_GITHUB_PAGES: true, // auf *.github.io automatisch aus
-  ISOCHRONE_TIME_LIMIT: 600,        // Sekunden (wird aus UI abgeleitet)
-  ISOCHRONE_BUCKET_SIZE_MIN: 5,     // 1, 2, 3, 5 oder 10 Minuten
-  PROFILE: "foot",                  // "foot" | "bike" | "car" | "transit"
+   ISOCHRONE_TIME_LIMIT: 1500,       // Sekunden (wird aus UI abgeleitet)
+   ISOCHRONE_BUCKET_SIZE_MIN: 5,     // 5, 10 oder 20 Minuten
+   PROFILE: "bike",                  // "foot" | "bike" | "car" | "transit"
   REMEMBER_ISOCHRONE_STARTS: false, // Startpunkte merken
   OPTIMIZATION_MODE: "none",       // "none" | "overlap" | "system_optimal"
   OVERPASS_SERVERS: [ "https://overpass-api.de/api/", ... ], // Fallback-Liste
@@ -141,4 +140,6 @@ CONFIG = {
 
 
 ## Lizenz
+
+Dieses Projekt steht unter der GNU Affero General Public License v3.0 (AGPL-3.0). Siehe [LICENSE](LICENSE).
 

@@ -58,3 +58,6 @@ schrott/
 *.parquet
 *.pmtiles
 *.fgb
+
+
+dev-server.mjs
