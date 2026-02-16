@@ -358,22 +358,11 @@ const API = {
       || s.includes('keine isochrone');
   },
 
-  _isLocalDevHost() {
-    const host = (typeof window !== 'undefined' && window.location && window.location.hostname)
-      ? window.location.hostname
-      : '';
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  },
-
   async _fetchTransitousIsochrone(point, { timeLimit, buckets }) {
     const maxTravelTimeMin = Math.max(1, Math.round((timeLimit || 600) / 60));
     const params = this._buildTransitousParams(point, maxTravelTimeMin);
 
-    const allCandidates = this._buildTransitousUrlCandidates();
-    const localOnly = this._isLocalDevHost();
-    const candidates = localOnly
-      ? allCandidates.filter(url => String(url || '').startsWith('/'))
-      : allCandidates;
+    const candidates = this._buildTransitousUrlCandidates();
 
     let json = null;
     let points = null;
@@ -397,7 +386,7 @@ const API = {
         }
         const contentType = res.headers.get('content-type') || '';
         if (!contentType.toLowerCase().includes('application/json')) {
-          throw new Error(`Transitous-Proxy antwortet nicht mit JSON (${contentType || 'unbekannt'}).`);
+          throw new Error(`Transitous antwortet nicht mit JSON (${contentType || 'unbekannt'}).`);
         }
         json = await res.json();
         if (json && typeof json === 'object' && json.error) {
@@ -421,17 +410,10 @@ const API = {
       if (this._isTransitNoReachabilityErrorMessage(msg)) {
         throw new Error('Keine Iso gefunden, bitte suche naeher an einem OeV-Haltepunkt.');
       }
-      if (localOnly) {
-        throw new Error(
-          `Lokaler Transitous-Proxy fehlt/ist falsch konfiguriert. ` +
-          `Erwartete lokale Endpunkte liefern derzeit keinen gültigen JSON one-to-all Response. ` +
-          `Bitte Proxy-Rewrite auf /api/v1/one-to-all prüfen. Letzter Fehler: ${msg}`
-        );
-      }
       if (hadCorsOrNetworkError) {
         throw new Error(
-          `Transitous ist aus dem Browser ohne Proxy nicht erreichbar (CORS). ` +
-          `Bitte Dev-Proxy konfigurieren (z. B. /transitous -> https://api.transitous.org) ` +
+          `Transitous ist aus dem Browser derzeit nicht erreichbar (CORS/Netzwerk). ` +
+          `Optional Proxy konfigurieren (z. B. /transitous -> https://api.transitous.org) ` +
           `und TRANSITOUS_ONE_TO_ALL_URL darauf setzen. Letzter Fehler: ${msg}`
         );
       }

@@ -30,9 +30,9 @@ Web-Anwendung zur Berechnung und Darstellung von **Isochronen** (Erreichbarkeits
    - **Cafés / Restaurants / Bars-Kneipen hier suchen**: Sucht im Umkreis (600 m) und zeigt Treffer als Marker.
 5. **Export**: Button „Export“ lädt die aktuelle bzw. alle gespeicherten Isochronen als GeoJSON herunter.
 
-## Lokaler Start mit Transitous-Proxy
+## Lokaler Start (Transitous direkt, Proxy optional)
 
-Für das ÖPNV-Profil ist lokal ein Proxy nötig (Browser-CORS). Dafür liegt ein minimaler Dev-Server im Repo:
+Standardmäßig nutzt die App Transitous direkt (CORS-fähig). Für lokale Entwicklung liegt trotzdem ein minimaler Dev-Server im Repo:
 
 ```bash
 node dev-server.mjs
@@ -42,18 +42,19 @@ Dann im Browser öffnen:
 
 - `http://localhost:3000`
 
-Der Server liefert statische Dateien aus dem Projekt aus und proxyt:
+Der Server liefert statische Dateien aus dem Projekt aus und kann zusätzlich proxyn:
 
 - `/transitous/*` -> `https://api.transitous.org/*`
 - `/api/*` -> `https://api.transitous.org/*` (Fallback, falls im Frontend bereits `/api/...` verwendet wird)
 
 Hinweis:
 
-- Für ÖPNV sollte `TRANSITOUS_ONE_TO_ALL_URL` auf `/transitous/api/v1/one-to-all` stehen.
+- Default ist direkter Zugriff über `https://api.transitous.org/api/v1/one-to-all`.
+- Optional kann `TRANSITOUS_ONE_TO_ALL_URL` auf `/transitous/api/v1/one-to-all` gesetzt werden, falls ein eigener Proxy gewünscht ist.
 
 ## Projektstruktur
 
-```
+```text
 miso/
 ├── index.html              # Einstiegsseite & Kontextmenüs
 ├── style.css               # Layout & Komponenten
@@ -124,9 +125,9 @@ Wichtige Einträge in `src/core/config.js`:
 ```javascript
 CONFIG = {
   GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone",  // GraphHopper Isochrone-API
-  TRANSITOUS_ONE_TO_ALL_URL: "/transitous/api/v1/one-to-all", // ÖPNV one-to-all (Proxy empfohlen)
+   TRANSITOUS_ONE_TO_ALL_URL: "https://api.transitous.org/api/v1/one-to-all", // ÖPNV one-to-all (direkt)
   TRANSIT_PROFILE_ENABLED: true,      // ÖPNV-Profil global an/aus
-  TRANSIT_PROFILE_AUTO_DISABLE_ON_GITHUB_PAGES: true, // auf *.github.io automatisch aus
+   TRANSIT_PROFILE_AUTO_DISABLE_ON_GITHUB_PAGES: false, // auf *.github.io automatisch aus (optional)
    ISOCHRONE_TIME_LIMIT: 1500,       // Sekunden (wird aus UI abgeleitet)
    ISOCHRONE_BUCKET_SIZE_MIN: 5,     // 5, 10 oder 20 Minuten
    PROFILE: "bike",                  // "foot" | "bike" | "car" | "transit"
