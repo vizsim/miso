@@ -89,7 +89,12 @@ class MLMarker extends MLBaseLayer {
     this._draggable = !!options.draggable;
   }
   _syncIcon() {
-    this._icon.className = this._iconDef.className || '';
+    const mapLibreClasses = Array.from(this._icon.classList || []).filter(cls => cls.startsWith('maplibregl-marker'));
+    const customClasses = String(this._iconDef.className || '')
+      .split(/\s+/)
+      .filter(Boolean);
+    const mergedClasses = Array.from(new Set([...mapLibreClasses, ...customClasses]));
+    this._icon.className = mergedClasses.join(' ');
     this._icon.innerHTML = this._iconDef.html || '';
   }
   _addToRenderer(renderer) {

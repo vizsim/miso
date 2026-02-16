@@ -1083,6 +1083,31 @@ html, body {
   box-shadow: 0 0 0 3px rgba(51, 136, 255, 0.5);
 }
 
+/* POI-Marker (Overpass): einheitliche Darstellung unabhängig von Emoji/Font-Rendering */
+.poi-marker-icon {
+  display: block;
+  line-height: 0;
+}
+
+.poi-marker-icon .poi-marker-icon-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.poi-marker-icon .poi-marker-icon-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.poi-marker-icon .poi-marker-icon-glyph svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 /* ============================================
    TOOLTIPS
    ============================================ */

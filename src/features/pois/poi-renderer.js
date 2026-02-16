@@ -5,7 +5,45 @@ const POI_STYLE = {
   bar: { color: '#1e3a5f', fill: '#2563eb', label: 'Bar/Kneipe' }
 };
 
+const POI_ICON_SVG = {
+  cafe: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h10v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8zm10 2h2.2a2.8 2.8 0 1 1 0 5.6H14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 4c0 1 .6 1.5 1.2 2 .6.5 1.2 1 1.2 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10 4c0 1 .6 1.5 1.2 2 .6.5 1.2 1 1.2 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  restaurant: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v8M9.5 3v8M12 3v8c0 1.7-1.3 3-3 3h-.2v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 3v6M17 9c1.7 0 3 1.3 3 3v9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  bar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v5a2 2 0 0 1-2 2h0a2 2 0 0 1-2-2v-5L4 5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+};
+
 const PoiRenderer = {
+  _computePolygonCentroid(latlngs) {
+    const points = (latlngs || []).filter(c => Array.isArray(c) && c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]));
+    if (points.length === 0) return null;
+    const first = points[0];
+    const last = points[points.length - 1];
+    const ring = (first[0] === last[0] && first[1] === last[1]) ? points.slice(0, -1) : points;
+    if (ring.length < 3) return { lat: ring[0][0], lng: ring[0][1] };
+
+    let area2 = 0;
+    let centroidLat = 0;
+    let centroidLng = 0;
+
+    for (let i = 0; i < ring.length; i++) {
+      const [lat1, lng1] = ring[i];
+      const [lat2, lng2] = ring[(i + 1) % ring.length];
+      const cross = (lng1 * lat2) - (lng2 * lat1);
+      area2 += cross;
+      centroidLat += (lat1 + lat2) * cross;
+      centroidLng += (lng1 + lng2) * cross;
+    }
+
+    if (Math.abs(area2) < 1e-12) {
+      let latSum = 0;
+      let lngSum = 0;
+      ring.forEach(([lat, lng]) => { latSum += lat; lngSum += lng; });
+      return { lat: latSum / ring.length, lng: lngSum / ring.length };
+    }
+
+    const factor = 1 / (3 * area2);
+    return { lat: centroidLat * factor, lng: centroidLng * factor };
+  },
+
   createPoiIcon(zoom, poiType) {
     const style = POI_STYLE[poiType] || POI_STYLE.cafe;
     const baseSize = Math.max(10, Math.min(36, 10 + (zoom - 10) * 2.8));
@@ -13,16 +51,18 @@ const PoiRenderer = {
     return MapRenderer.createDivIcon({
       className: 'poi-marker-icon',
       html: `
-        <div style="
+        <div class="poi-marker-icon-inner" style="
           width: ${baseSize}px; height: ${baseSize}px;
           background-color: ${style.fill};
           border: ${borderWidth}px solid ${style.color};
           border-radius: 50%;
           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
           display: flex; align-items: center; justify-content: center;
-          color: white; font-size: ${baseSize * 0.55}px; font-weight: bold;
+          color: white;
           cursor: pointer;
-        ">${poiType === 'cafe' ? '☕' : poiType === 'restaurant' ? '🍽' : '🍺'}</div>`,
+        ">
+          <span class="poi-marker-icon-glyph" style="width:${baseSize * 0.62}px;height:${baseSize * 0.62}px;">${POI_ICON_SVG[poiType] || POI_ICON_SVG.cafe}</span>
+        </div>`,
       iconSize: [baseSize, baseSize],
       iconAnchor: [baseSize / 2, baseSize / 2]
     });
@@ -62,12 +102,9 @@ const PoiRenderer = {
         poly._poiId = place.id;
         poly.bindPopup(createPopup(place), { maxWidth: 250, className: 'poi-popup' });
         layers.push(poly);
-        const coords = place.coordinates[0][0] === place.coordinates[place.coordinates.length - 1][0] ? place.coordinates.slice(0, -1) : place.coordinates;
-        let clat = 0, clng = 0;
-        coords.forEach(c => { clat += c[0]; clng += c[1]; });
-        clat /= coords.length;
-        clng /= coords.length;
-        const m = MapRenderer.createMarker([clat, clng], { icon }).addTo(layerGroup);
+        const centroid = this._computePolygonCentroid(place.coordinates);
+        if (!centroid) return;
+        const m = MapRenderer.createMarker([centroid.lat, centroid.lng], { icon }).addTo(layerGroup);
         m._isPoiLayer = true;
         m._poiType = poiType;
         m._poiId = place.id;
