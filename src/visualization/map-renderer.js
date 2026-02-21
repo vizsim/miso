@@ -459,6 +459,88 @@ const MapRenderer = {
     } catch (_) {}
   },
 
+  /**
+   * Add optional basemap overlay sources and layers (OSM, Satellite, Terrain, Hillshade).
+   * Called on every style load so they exist after setStyle().
+   * Safe to call multiple times; each add is guarded and wrapped in try/catch.
+   */
+  _addOptionalBasemapLayers() {
+    const map = this._map;
+    if (!map || !map.getStyle()) return;
+
+    function addSource(id, config) {
+      try {
+        if (!map.getSource(id)) map.addSource(id, config);
+      } catch (e) {
+        console.warn('addOptionalBasemapLayers: addSource(' + id + ')', e);
+      }
+    }
+    function addLayer(config) {
+      try {
+        if (!map.getLayer(config.id)) map.addLayer(config);
+      } catch (e) {
+        console.warn('addOptionalBasemapLayers: addLayer(' + config.id + ')', e);
+      }
+    }
+
+    addSource('osm', {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors'
+    });
+    addSource('satellite', {
+      type: 'raster',
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      attribution: 'Tiles © Esri'
+    });
+    addSource('terrain', {
+      type: 'raster-dem',
+      url: 'https://tiles.mapterhorn.com/tilejson.json',
+      tileSize: 512,
+      encoding: 'terrarium',
+      attribution: '© Mapterhorn - https://mapterhorn.com'
+    });
+    addSource('hillshade', {
+      type: 'raster-dem',
+      url: 'https://tiles.mapterhorn.com/tilejson.json',
+      tileSize: 512,
+      encoding: 'terrarium',
+      attribution: '© Mapterhorn - https://mapterhorn.com'
+    });
+
+    addLayer({
+      id: 'osm-layer',
+      type: 'raster',
+      source: 'osm',
+      layout: { visibility: 'none' }
+    });
+    addLayer({
+      id: 'satellite-layer',
+      type: 'raster',
+      source: 'satellite',
+      layout: { visibility: 'none' }
+    });
+    addLayer({
+      id: 'hillshade-layer',
+      type: 'hillshade',
+      source: 'hillshade',
+      layout: { visibility: 'none' },
+      paint: {
+        'hillshade-shadow-color': '#000000',
+        'hillshade-highlight-color': '#ffffff',
+        'hillshade-accent-color': '#000000'
+      }
+    });
+
+    try {
+      map.setTerrain(null);
+    } catch (e) {
+      console.warn('addOptionalBasemapLayers: setTerrain(null)', e);
+    }
+  },
+
   async setPopulationLayerVisible(visible) {
     if (!this._map) return;
     if (!this._map.isStyleLoaded()) {
@@ -578,7 +660,15 @@ const MapRenderer = {
       zoom: CONFIG.MAP_ZOOM,
       style: 'https://tiles.openfreemap.org/styles/positron'
     });
-    map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
+
+    const customNavEl = document.getElementById('custom-nav-control');
+    if (customNavEl) {
+      const nav = new maplibregl.NavigationControl();
+      customNavEl.appendChild(nav.onAdd(map));
+    } else {
+      map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
+    }
+
     map.setView = (latlng, zoom) => {
       const ll = _toLngLat(latlng);
       map.easeTo({ center: [ll.lng, ll.lat], zoom: zoom ?? map.getZoom() });
@@ -587,6 +677,31 @@ const MapRenderer = {
     this._layerGroup = new MLLayerGroup(this);
     State.setMap(map);
     State.setLayerGroup(this._layerGroup);
+
+    const self = this;
+    map.on('load', () => {
+      self._addOptionalBasemapLayers();
+      function applyState() {
+        if (typeof window._applyMapLayerState === 'function') {
+          window._applyMapLayerState(map);
+        }
+        if ((CONFIG.POPULATION_PMTILES_URL || '').trim() && CONFIG.POPULATION_LAYER_VISIBLE) {
+          self.setPopulationLayerVisible(true);
+        }
+      }
+      setTimeout(applyState, 120);
+      setTimeout(applyState, 450);
+      map.once('idle', function () {
+        applyState();
+        if (typeof window._applyTerrainFromCheckbox === 'function') {
+          window._applyTerrainFromCheckbox(map);
+        }
+      });
+    });
+
+    window._ensureBasemapOverlayLayers = () => {
+      if (this._map && this._map.getStyle()) this._addOptionalBasemapLayers();
+    };
 
     map.on('click', (e) => EventBus.emit(Events.MAP_CLICK, { latlng: { lat: e.lngLat.lat, lng: e.lngLat.lng } }));
     let zoomUpdateTimeout = null;

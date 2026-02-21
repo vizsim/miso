@@ -7,14 +7,228 @@ html, body {
   margin: 0; 
 }
 
-#map { 
-  height: 100%; 
+.map-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
 }
 
 /* MapLibre Zoom Controls Position (unten links) */
 .maplibregl-ctrl-bottom-left {
   bottom: 10px;
   left: 10px;
+}
+
+/* ============================================
+   BOTTOM-LEFT UI: Layer / Karten-Einstellungen
+   ============================================ */
+#bottom-left-ui-container {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  gap: 12px;
+  z-index: 2;
+  font-family: system-ui, sans-serif;
+  align-items: flex-end;
+}
+
+#custom-nav-control-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+#custom-nav-control .maplibregl-ctrl-group {
+  margin: 0;
+}
+
+#map-settings-menu {
+  position: relative;
+}
+
+.map-settings-btn {
+  width: 30px;
+  height: 30px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  transition: all 0.2s;
+  color: #374151;
+  padding: 0;
+}
+
+.map-settings-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.map-settings-btn:active {
+  transform: scale(0.95);
+}
+
+.map-settings-panel {
+  position: absolute;
+  bottom: 42px;
+  left: 0;
+  background: #fff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 12px;
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  box-sizing: border-box;
+  z-index: 10;
+  font-size: 13px;
+  transition: opacity 0.2s, transform 0.2s;
+  transform-origin: bottom left;
+  color: #111827;
+}
+
+.map-settings-panel.hidden {
+  display: none;
+}
+
+.map-settings-section {
+  margin-bottom: 12px;
+}
+
+.map-settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.map-settings-label {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.map-settings-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 12px 0;
+}
+
+.basemap-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.basemap-btn {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: block;
+}
+
+.basemap-btn:hover {
+  border-color: #9ca3af;
+  opacity: 0.9;
+}
+
+.basemap-btn.selected {
+  border-color: #3388ff;
+  border-width: 3px;
+}
+
+/* Fallback-Farbe falls Thumbnail noch lädt */
+.basemap-btn[data-map="standard"] { background-color: #f5f5f0; }
+.basemap-btn[data-map="dark"]    { background-color: #2d3748; }
+.basemap-btn[data-map="osm"]     { background-color: #e8e6e1; }
+.basemap-btn[data-map="satellite"] { background-color: #4a5568; }
+
+.switch-control {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.switch-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  min-height: 1.2em;
+}
+
+.switch-label span:first-child {
+  font-size: 13px;
+  line-height: 1.2;
+  color: #111827;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 44px;
+  height: 24px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.switch input:checked + .switch-slider {
+  background-color: #3388ff;
+}
+
+.switch input:checked + .switch-slider:before {
+  transform: translateX(20px);
+}
+
+.switch input:focus + .switch-slider {
+  box-shadow: 0 0 0 2px rgba(51, 136, 255, 0.3);
 }
 
 /* Einwohner-Layer: Hover-Tooltip */
