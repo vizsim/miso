@@ -48,15 +48,20 @@ const CONFIG = {
   REMEMBER_ISOCHRONE_STARTS: false, // Startpunkte (Isochronen) merken
   // Optimierung: 'none' | 'overlap' (von allen in gleicher Zeit) | 'system_optimal' (Einzugsgebiete)
   OPTIMIZATION_MODE: 'none',
-  // Einwohner-Gewichtung (PMTiles): Startpunkte nach Bevölkerungsdichte
-  POPULATION_PMTILES_URL: "https://f003.backblazeb2.com/file/unfallkarte-data/Zensus2022_100m_poly_GER_wPLZ_wRS_ew_10.pmtiles", // URL des PMTiles (100×100 m Polygone mit Einwohner); leer = deaktiviert
+  // Einwohner (PMTiles): Overlay „Einwohner“ + ggf. Startpunkte-Gewichtung
+  POPULATION_PMTILES_URL: "https://f003.backblazeb2.com/file/unfallkarte-data/Zensus2022_100m_poly_GER_wPLZ_wRS_ew_10.pmtiles", // leer = deaktiviert
 
-  
   POPULATION_PROPERTY: "Einwohner", // Attributname für Einwohnerzahl im PMTiles-Layer
   POPULATION_LAYER_NAME: "rasters-polys", // Layer-Name im PMTiles (leer = erster Layer mit Features)
-  POPULATION_ZOOM: 14, // Wunsch-Zoom für Tile-Abfrage; wird durch maxZoom des PMTiles-Archivs begrenzt
-  POPULATION_LAYER_VISIBLE: false, // Einwohnerlayer optional auf Karte anzeigen
-  POPULATION_LAYER_MAX_NATIVE_ZOOM: 14 // Höchster Zoom im PMTiles; darüber wird überzoomed (Layer bleibt sichtbar)
+  POPULATION_ZOOM: 14, // Zoom für PopulationService (getPopulationFeaturesInRadius / getPopulationAtPoint)
+  POPULATION_LAYER_VISIBLE: false, // Overlay beim Start an (wenn true); sonst nur Overlay-Kachel „Einwohner“
+  POPULATION_LAYER_MAX_NATIVE_ZOOM: 14, // Nur für PopulationService; Karten-Overlay nutzt immer Overzoom bis z22
+
+  // Overlay ÖPNV (Raster). pt.facilmap.org sendet keine CORS-Header.
+  // OVERLAY_OPNV_TILE_URL: Leer = Tiles über CORS-Proxy (rate-limitiert). Sonst direkte/Proxy-URL mit {z}/{x}/{y}.
+  OVERLAY_OPNV_TILE_URL: "",
+  // Optional: eigener CORS-Proxy (wird nur genutzt wenn OVERLAY_OPNV_TILE_URL leer ist). Format: "https://proxy.de/?url=" – es wird encodeURIComponent(Tile-URL) angehängt. Leer = corsproxy.io (stark rate-limitiert).
+  OVERLAY_OPNV_CORS_PROXY: "https://miso-cors-proxy.sims-com.workers.dev/?url="
 };
 
 /**

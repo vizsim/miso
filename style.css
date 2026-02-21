@@ -159,6 +159,60 @@ html, body {
 .basemap-btn[data-map="osm"]     { background-color: #e8e6e1; }
 .basemap-btn[data-map="satellite"] { background-color: #4a5568; }
 
+/* Overlay-Kacheln (ein-/ausblendbar) */
+.overlay-tiles {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.overlay-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 64px;
+  height: 52px;
+  padding: 6px 10px;
+  background: #f9fafb;
+  border: 2px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 11px;
+  color: #374151;
+}
+
+.overlay-tile:hover {
+  border-color: #9ca3af;
+  background: #f3f4f6;
+}
+
+.overlay-tile.active {
+  border-color: #3388ff;
+  border-width: 3px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.overlay-tile-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.overlay-tile-label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.overlay-tile:disabled,
+.overlay-tile.overlay-tile--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
 .switch-control {
   display: flex;
   flex-direction: column;
@@ -232,28 +286,44 @@ html, body {
 }
 
 /* Einwohner-Layer: Hover-Tooltip */
-.population-tooltip {
-  font-size: 13px;
-  padding: 6px 10px;
-  white-space: nowrap;
-}
-.population-tooltip::before {
-  border-bottom-color: rgba(0, 0, 0, 0.15);
+/* Einwohner-Legende: rechts neben Layer-Auswahl (Bottom-Left-Container) */
+.population-legend-wrapper {
+  display: none;
+  align-self: flex-end;
 }
 
-/* Einwohner-Layer: Legende / Colormap (nur sichtbar wenn Layer aktiv) */
 .population-legend {
-  display: none;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #eee;
+  padding: 12px 14px;
+  background: #fff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-size: 13px;
+  color: #111827;
+  min-width: 160px;
 }
+
+.population-legend-title {
+  margin: 0 0 2px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: 0.02em;
+}
+
+.population-legend-subtitle {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.3;
+}
+
 .population-legend-bar {
   display: flex;
-  height: 12px;
-  border-radius: 2px;
+  height: 14px;
+  border-radius: 4px;
   overflow: hidden;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .population-legend-segment {
   flex: 1;
@@ -262,8 +332,9 @@ html, body {
 .population-legend-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
-  color: #666;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
 }
 .population-legend-tick {
   flex: 1;

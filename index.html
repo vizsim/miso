@@ -250,7 +250,7 @@
     <div id="map"></div>
   </div>
 
-  <!-- Bottom Left UI Container (Layer / Karten-Einstellungen) -->
+  <!-- Bottom Left UI Container (Layer / Karten-Einstellungen + Einwohner-Legende) -->
   <div id="bottom-left-ui-container">
     <div id="custom-nav-control-wrapper">
       <div id="custom-nav-control"></div>
@@ -262,6 +262,20 @@
         </svg>
       </button>
       <div id="map-settings-panel" class="map-settings-panel hidden">
+        <div class="map-settings-section">
+          <div class="map-settings-label">Overlays</div>
+          <div class="overlay-tiles">
+            <button type="button" class="overlay-tile" id="overlay-opnv" data-overlay="opnv" title="ÖPNV (FacilMap)">
+              <span class="overlay-tile-icon">🚌</span>
+              <span class="overlay-tile-label">ÖPNV</span>
+            </button>
+            <button type="button" class="overlay-tile" id="overlay-einwohner" data-overlay="einwohner" title="Einwohner (Zensus 100 m)">
+              <span class="overlay-tile-icon">👥</span>
+              <span class="overlay-tile-label">Einwohner</span>
+            </button>
+          </div>
+        </div>
+        <div class="map-settings-divider"></div>
         <div class="map-settings-section">
           <div class="map-settings-label">Kartenstil</div>
           <div class="basemap-buttons">
@@ -291,6 +305,9 @@
           </div>
         </div>
       </div>
+    </div>
+    <div id="population-legend-wrapper" class="population-legend-wrapper">
+      <div id="population-legend" class="population-legend" aria-hidden="true"></div>
     </div>
   </div>
 
@@ -458,7 +475,7 @@
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
   <script src="https://unpkg.com/h3-js@4.4.0/dist/h3-js.umd.js"></script>
   <script src="https://unpkg.com/pbf@3.2.1/dist/pbf.js"></script>
-  <script src="https://unpkg.com/pmtiles@3.0.2/dist/pmtiles.js"></script>
+  <script src="https://unpkg.com/pmtiles@4.4.0/dist/pmtiles.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/de.js"></script>
   

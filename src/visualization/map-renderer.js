@@ -379,13 +379,12 @@ function _circleGeometry(lat, lng, radiusMeters, steps = 64) {
 const MapRenderer = {
   _map: null,
   _layerGroup: null,
-  _populationHoverTimeout: null,
-  _populationHoverPopup: null,
   _populationSourceId: 'population-source',
   _populationFillLayerId: 'population-fill',
   _populationLineLayerId: 'population-line',
-  _populationHoverAttached: false,
   _pmtilesProtocolAdded: false,
+  _pmtilesConsoleFilterAdded: false,
+  _opnvProtocolAdded: false,
 
   createDivIcon(options) { return new MLDivIcon(options); },
   createMarker(latlng, options) { return new MLMarker(latlng, options); },
@@ -424,6 +423,33 @@ const MapRenderer = {
     return layer instanceof MLGeoLayer && layer._geometry?.type === 'LineString';
   },
 
+  // ---------- Population (Einwohner-PMTiles-Overlay) ----------
+  // PMTiles-Protocol: errorOnMissingTile=true sorgt dafür, dass MapLibre bei fehlenden Tiles
+  // (z. B. Zoom 18 bei Archiv max=11) selbst Parent-Tiles anfordert (Overzoom). Die dabei
+  // geworfenen „Tile not found“-Fehler werden unten gefiltert, damit die Konsole ruhig bleibt.
+  _ensurePMTilesProtocol() {
+    if (this._pmtilesProtocolAdded || typeof pmtiles === 'undefined' || typeof maplibregl === 'undefined') return;
+    try {
+      let protocol;
+      try {
+        protocol = new pmtiles.Protocol({ errorOnMissingTile: true });
+      } catch (_) {
+        protocol = new pmtiles.Protocol();
+      }
+      maplibregl.addProtocol('pmtiles', protocol.tile);
+      if (typeof console !== 'undefined' && !this._pmtilesConsoleFilterAdded) {
+        this._pmtilesConsoleFilterAdded = true;
+        const orig = console.error;
+        console.error = function () {
+          const first = arguments[0];
+          if (first && typeof first === 'object' && first.message === 'Tile not found.') return;
+          orig.apply(console, arguments);
+        };
+      }
+      this._pmtilesProtocolAdded = true;
+    } catch (_) {}
+  },
+
   _renderPopulationLegend() {
     const el = document.getElementById('population-legend');
     if (!el) return;
@@ -436,27 +462,100 @@ const MapRenderer = {
       if (pop < 2000) return 'rgba(215,120,50,0.44)';
       return 'rgba(170,80,30,0.55)';
     };
-    let html = '<div class="population-legend-bar">';
+    let html = '<h4 class="population-legend-title">Einwohner</h4>';
+    html += '<p class="population-legend-subtitle">pro 100×100 m (Zensus)</p>';
+    html += '<div class="population-legend-bar">';
     ticks.forEach(v => { html += `<span class="population-legend-segment" style="background:${fillForPop(v)}" title="${v}"></span>`; });
     html += '</div><div class="population-legend-labels">';
     ticks.forEach(v => { html += `<span class="population-legend-tick">${v}</span>`; });
     html += '</div>';
     el.innerHTML = html;
   },
+
   _setPopulationLegendVisible(visible) {
+    const wrapper = document.getElementById('population-legend-wrapper');
     const el = document.getElementById('population-legend');
-    if (!el) return;
-    el.style.display = visible ? 'block' : 'none';
+    if (wrapper) wrapper.style.display = visible ? 'block' : 'none';
+    if (el) el.setAttribute('aria-hidden', visible ? 'false' : 'true');
   },
 
-  _ensurePMTilesProtocol() {
-    if (this._pmtilesProtocolAdded) return;
-    if (typeof pmtiles === 'undefined' || typeof maplibregl === 'undefined') return;
+  /**
+   * ÖPNV-Tiles über CORS-Proxy laden. Bei eigenem Proxy (OVERLAY_OPNV_CORS_PROXY) schnell,
+   * bei corsproxy.io stark gedrosselt wegen Rate-Limit.
+   */
+  _ensureOpnvProtocol() {
+    if (this._opnvProtocolAdded || typeof maplibregl === 'undefined') return;
+    const proxyPrefix = (typeof CONFIG !== 'undefined' && CONFIG.OVERLAY_OPNV_CORS_PROXY && CONFIG.OVERLAY_OPNV_CORS_PROXY.trim()) || 'https://corsproxy.io/?';
+    const isOwnProxy = proxyPrefix.indexOf('corsproxy.io') === -1;
+    const MAX_CONCURRENT = isOwnProxy ? 8 : 1;
+    const MIN_DELAY_MS = isOwnProxy ? 0 : 600;
+    const MAX_CACHE = 300;
+    let inFlight = 0;
+    let lastRequestTime = 0;
+    const waitQueue = [];
+    const tileCache = new Map();
+
+    function acquire() {
+      if (inFlight < MAX_CONCURRENT) {
+        inFlight += 1;
+        return Promise.resolve();
+      }
+      return new Promise(function (resolve) { waitQueue.push(resolve); })
+        .then(function () { inFlight += 1; });
+    }
+    function release() {
+      inFlight -= 1;
+      if (waitQueue.length > 0) waitQueue.shift()();
+    }
+    function waitThrottle() {
+      if (MIN_DELAY_MS <= 0) return Promise.resolve();
+      const now = Date.now();
+      const elapsed = now - lastRequestTime;
+      if (elapsed < MIN_DELAY_MS && inFlight >= 1) {
+        return new Promise(function (r) { setTimeout(r, MIN_DELAY_MS - elapsed); });
+      }
+      return Promise.resolve();
+    }
+
     try {
-      const protocol = new pmtiles.Protocol();
-      maplibregl.addProtocol('pmtiles', protocol.tile);
-      this._pmtilesProtocolAdded = true;
-    } catch (_) {}
+      maplibregl.addProtocol('opnv', async (params, abortController) => {
+        const url = (params && params.url) ? params.url : '';
+        const m = url.match(/^opnv:\/\/tile\/(\d+)\/(\d+)\/(\d+)\.png$/);
+        if (!m) throw new Error('Invalid opnv tile URL: ' + url);
+        const z = m[1], x = m[2], y = m[3];
+        const realUrl = 'https://pt.facilmap.org/tile/' + z + '/' + x + '/' + y + '.png';
+
+        const cached = tileCache.get(realUrl);
+        if (cached) return { data: cached.slice(0) };
+
+        await acquire();
+        try {
+          await waitThrottle();
+          lastRequestTime = Date.now();
+          const proxyUrl = proxyPrefix + encodeURIComponent(realUrl);
+          const res = await fetch(proxyUrl, { signal: abortController && abortController.signal });
+          if (res.status === 429) {
+            await new Promise(r => setTimeout(r, 2000));
+            const retry = await fetch(proxyUrl, { signal: abortController && abortController.signal });
+            if (!retry.ok) throw new Error('Tile fetch ' + retry.status);
+            const data = await retry.arrayBuffer();
+            if (tileCache.size >= MAX_CACHE) tileCache.delete(tileCache.keys().next().value);
+            tileCache.set(realUrl, data);
+            return { data };
+          }
+          if (!res.ok) throw new Error('Tile fetch ' + res.status);
+          const data = await res.arrayBuffer();
+          if (tileCache.size >= MAX_CACHE) tileCache.delete(tileCache.keys().next().value);
+          tileCache.set(realUrl, data);
+          return { data };
+        } finally {
+          release();
+        }
+      });
+      this._opnvProtocolAdded = true;
+    } catch (e) {
+      console.warn('_ensureOpnvProtocol:', e);
+    }
   },
 
   /**
@@ -534,6 +633,23 @@ const MapRenderer = {
       }
     });
 
+    // Overlay: ÖPNV (FacilMap). Ohne OVERLAY_OPNV_TILE_URL = Tiles über eingebauten CORS-Proxy (opnv://).
+    const opnvUrl = (typeof CONFIG !== 'undefined' && CONFIG.OVERLAY_OPNV_TILE_URL || '').trim();
+    const opnvTiles = opnvUrl ? [opnvUrl] : ['opnv://tile/{z}/{x}/{y}.png'];
+    if (!opnvUrl) this._ensureOpnvProtocol();
+    addSource('overlay-opnv', {
+      type: 'raster',
+      tiles: opnvTiles,
+      tileSize: 256,
+      attribution: '© FacilMap / OSM'
+    });
+    addLayer({
+      id: 'overlay-opnv-layer',
+      type: 'raster',
+      source: 'overlay-opnv',
+      layout: { visibility: 'none' }
+    });
+
     try {
       map.setTerrain(null);
     } catch (e) {
@@ -541,7 +657,34 @@ const MapRenderer = {
     }
   },
 
-  async setPopulationLayerVisible(visible) {
+  /**
+   * Overlay ein-/ausblenden (opnv = Raster, einwohner = PMTiles).
+   * Wird von map-layer-controls.js aufgerufen.
+   */
+  _setOverlayVisibility(overlayId, visible) {
+    const map = this._map;
+    if (!map || !map.getStyle()) return;
+    if (overlayId === 'opnv') {
+      try {
+        if (map.getLayer('overlay-opnv-layer')) {
+          map.setLayoutProperty('overlay-opnv-layer', 'visibility', visible ? 'visible' : 'none');
+        }
+      } catch (e) {
+        console.warn('_setOverlayVisibility(opnv):', e);
+      }
+      return;
+    }
+    if (overlayId === 'einwohner') {
+      this.setPopulationLayerVisible(!!visible);
+    }
+  },
+
+  /**
+   * Einwohner-PMTiles-Overlay ein- oder ausblenden.
+   * Source wird mit maxzoom 22 angelegt, damit MapLibre auch bei hohem Zoom Tiles anfordert;
+   * das PMTiles-Protocol liefert dann Overzoom aus dem Archiv (z. B. min=10, max=11).
+   */
+  setPopulationLayerVisible(visible) {
     if (!this._map) return;
     if (!this._map.isStyleLoaded()) {
       this._map.once('load', () => this.setPopulationLayerVisible(visible));
@@ -551,7 +694,6 @@ const MapRenderer = {
     if (!url) return;
     if (!visible) {
       this._setPopulationLegendVisible(false);
-      this._detachPopulationHover();
       if (this._map.getLayer(this._populationFillLayerId)) this._map.setLayoutProperty(this._populationFillLayerId, 'visibility', 'none');
       if (this._map.getLayer(this._populationLineLayerId)) this._map.setLayoutProperty(this._populationLineLayerId, 'visibility', 'none');
       return;
@@ -562,95 +704,63 @@ const MapRenderer = {
     const layerName = (CONFIG.POPULATION_LAYER_NAME && CONFIG.POPULATION_LAYER_NAME.trim()) || 'rasters-polys';
     const propName = (CONFIG.POPULATION_PROPERTY && CONFIG.POPULATION_PROPERTY.trim()) || 'Einwohner';
     const propLower = propName.toLowerCase();
-    const maxNativeZoom = typeof CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM === 'number'
-      ? CONFIG.POPULATION_LAYER_MAX_NATIVE_ZOOM
-      : ((typeof PopulationService !== 'undefined' && PopulationService.getPopulationPMTilesMaxZoom)
-          ? await PopulationService.getPopulationPMTilesMaxZoom().catch(() => 14)
-          : 14);
 
-    if (!this._map.getSource(this._populationSourceId)) {
-      this._map.addSource(this._populationSourceId, {
-        type: 'vector',
-        url: `pmtiles://${url}`,
-        maxzoom: maxNativeZoom
-      });
+    if (this._map.getSource(this._populationSourceId)) {
+      if (this._map.getLayer(this._populationFillLayerId)) this._map.removeLayer(this._populationFillLayerId);
+      if (this._map.getLayer(this._populationLineLayerId)) this._map.removeLayer(this._populationLineLayerId);
+      this._map.removeSource(this._populationSourceId);
     }
+    this._map.addSource(this._populationSourceId, {
+      type: 'vector',
+      url: `pmtiles://${url}`,
+      minzoom: 9,
+      maxzoom: 22,
+      attribution: POPULATION_ATTRIBUTION
+    });
 
     const popExpr = ['to-number', ['coalesce', ['get', propName], ['get', propLower], 0]];
-    if (!this._map.getLayer(this._populationFillLayerId)) {
-      this._map.addLayer({
-        id: this._populationFillLayerId,
-        type: 'fill',
-        source: this._populationSourceId,
-        'source-layer': layerName,
-        paint: {
-          'fill-color': [
-            'step',
-            popExpr,
-            'rgba(255,255,245,0.08)',
-            10, 'rgba(255,240,210,0.16)',
-            50, 'rgba(255,215,160,0.24)',
-            100, 'rgba(245,170,90,0.34)',
-            500, 'rgba(215,120,50,0.44)',
-            2000, 'rgba(170,80,30,0.55)'
-          ]
-        }
+    this._map.addLayer({
+      id: this._populationFillLayerId,
+      type: 'fill',
+      source: this._populationSourceId,
+      'source-layer': layerName,
+      minzoom: 9,
+      maxzoom: 24,
+      paint: {
+        'fill-color': [
+          'step',
+          popExpr,
+          'rgba(255,255,245,0.08)',
+          10, 'rgba(255,240,210,0.16)',
+          50, 'rgba(255,215,160,0.24)',
+          100, 'rgba(245,170,90,0.34)',
+          500, 'rgba(215,120,50,0.44)',
+          2000, 'rgba(170,80,30,0.55)'
+        ]
+      }
+    });
+    this._map.addLayer({
+      id: this._populationLineLayerId,
+      type: 'line',
+      source: this._populationSourceId,
+      'source-layer': layerName,
+      minzoom: 0,
+      maxzoom: 24,
+      paint: {
+        'line-color': 'rgba(253, 248, 248, 0.94)',
+        'line-width': 0.8
+      }
+    });
+    // Sofort Tiles für aktuelle Ansicht anfordern (MapLibre macht das oft erst beim nächsten View-Update)
+    const map = this._map;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const c = map.getCenter();
+        const z = map.getZoom();
+        map.jumpTo({ center: c, zoom: z });
+        if (typeof map.triggerRepaint === 'function') map.triggerRepaint();
       });
-    } else {
-      this._map.setLayoutProperty(this._populationFillLayerId, 'visibility', 'visible');
-    }
-    if (!this._map.getLayer(this._populationLineLayerId)) {
-      this._map.addLayer({
-        id: this._populationLineLayerId,
-        type: 'line',
-        source: this._populationSourceId,
-        'source-layer': layerName,
-        paint: {
-          'line-color': 'rgba(180,180,180,0.15)',
-          'line-width': 0.8
-        }
-      });
-    } else {
-      this._map.setLayoutProperty(this._populationLineLayerId, 'visibility', 'visible');
-    }
-    this._attachPopulationHover();
-  },
-
-  _attachPopulationHover() {
-    if (!this._map || this._populationHoverAttached) return;
-    this._populationHoverAttached = true;
-    const onMove = (e) => {
-      if (this._populationHoverTimeout) clearTimeout(this._populationHoverTimeout);
-      this._populationHoverTimeout = setTimeout(async () => {
-        const lat = e.lngLat.lat;
-        const lng = e.lngLat.lng;
-        if (typeof PopulationService === 'undefined' || !PopulationService.getPopulationAtPoint) return;
-        const result = await PopulationService.getPopulationAtPoint(lat, lng).catch(() => null);
-        if (this._populationHoverPopup) this._populationHoverPopup.remove();
-        if (result && result.population != null) {
-          this._populationHoverPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'population-tooltip', offset: 10 })
-            .setLngLat([lng, lat])
-            .setHTML(`Einwohner: ${result.population}`)
-            .addTo(this._map);
-        }
-      }, 80);
-    };
-    const onOut = () => {
-      if (this._populationHoverPopup) this._populationHoverPopup.remove();
-      this._populationHoverPopup = null;
-    };
-    this._map.on('mousemove', this._populationFillLayerId, onMove);
-    this._map.on('mouseleave', this._populationFillLayerId, onOut);
-    this._populationHoverMove = onMove;
-    this._populationHoverOut = onOut;
-  },
-  _detachPopulationHover() {
-    if (!this._map || !this._populationHoverAttached) return;
-    if (this._populationHoverMove) this._map.off('mousemove', this._populationFillLayerId, this._populationHoverMove);
-    if (this._populationHoverOut) this._map.off('mouseleave', this._populationFillLayerId, this._populationHoverOut);
-    this._populationHoverAttached = false;
-    if (this._populationHoverPopup) this._populationHoverPopup.remove();
-    this._populationHoverPopup = null;
+    });
   },
 
   init() {
@@ -678,15 +788,16 @@ const MapRenderer = {
     State.setMap(map);
     State.setLayerGroup(this._layerGroup);
 
+    window._setOverlayVisibility = (overlayId, visible) => {
+      this._setOverlayVisibility(overlayId, visible);
+    };
+
     const self = this;
     map.on('load', () => {
       self._addOptionalBasemapLayers();
       function applyState() {
         if (typeof window._applyMapLayerState === 'function') {
           window._applyMapLayerState(map);
-        }
-        if ((CONFIG.POPULATION_PMTILES_URL || '').trim() && CONFIG.POPULATION_LAYER_VISIBLE) {
-          self.setPopulationLayerVisible(true);
         }
       }
       setTimeout(applyState, 120);
@@ -717,42 +828,8 @@ const MapRenderer = {
 
     this._initContextMenu();
 
-    const populationWeightGroup = Utils.getElement('#population-weight-group');
-    const populationLayerCheckbox = Utils.getElement('#config-population-layer-visible');
-    const populationWeightCheckbox = Utils.getElement('#config-population-weight-starts');
     if ((CONFIG.POPULATION_PMTILES_URL || '').trim()) {
-      if (populationWeightGroup) populationWeightGroup.style.display = 'block';
       this._renderPopulationLegend();
-      this._setPopulationLegendVisible(!!CONFIG.POPULATION_LAYER_VISIBLE);
-      if (populationLayerCheckbox) {
-        populationLayerCheckbox.checked = !!CONFIG.POPULATION_LAYER_VISIBLE;
-        populationLayerCheckbox.addEventListener('change', () => {
-          CONFIG.POPULATION_LAYER_VISIBLE = populationLayerCheckbox.checked;
-          this.setPopulationLayerVisible(CONFIG.POPULATION_LAYER_VISIBLE);
-        });
-        if (CONFIG.POPULATION_LAYER_VISIBLE) this.setPopulationLayerVisible(true);
-      }
-      if (populationWeightCheckbox) {
-        populationWeightCheckbox.addEventListener('change', async () => {
-          const lastTarget = State.getLastTarget();
-          const lastStarts = State.getLastStarts();
-          if (!lastTarget || !lastStarts || lastStarts.length === 0 || isRememberMode()) return;
-          try {
-            MapRenderer.removePolylines(State.getRoutePolylines());
-            MapRenderer.clearRoutes();
-            State.setRoutePolylines([]);
-            const routeInfo = await RouteService.calculateRoutes(lastTarget, { reuseStarts: false });
-            if (routeInfo) {
-              Visualization.updateDistanceHistogram(routeInfo.starts, lastTarget, { routeData: routeInfo.routeData, routeDistances: RouteService.getRouteDistances(routeInfo) });
-              EventBus.emit(Events.ROUTES_CALCULATED, { target: lastTarget, routeInfo });
-            }
-          } catch (e) {
-            if (typeof Utils !== 'undefined' && Utils.logError) Utils.logError('MapRenderer', e);
-          }
-        });
-      }
-    } else if (populationWeightGroup) {
-      populationWeightGroup.style.display = 'none';
     }
     EventBus.emit(Events.MAP_READY);
   },

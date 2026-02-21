@@ -35,6 +35,14 @@
         map.setLayoutProperty('hillshade-layer', 'visibility', vis);
       }
       applyTerrainFromCheckbox(map);
+      // Overlay-Zustand aus UI wiederherstellen (ÖPNV, Einwohner)
+      document.querySelectorAll('.overlay-tile').forEach(function (btn) {
+        const overlay = btn.getAttribute('data-overlay');
+        const isActive = btn.classList.contains('active');
+        if (overlay && typeof window._setOverlayVisibility === 'function') {
+          window._setOverlayVisibility(overlay, isActive);
+        }
+      });
     } catch (e) {
       console.warn('applyMapLayerState:', e);
     }
@@ -170,6 +178,23 @@
         m.setLayoutProperty('hillshade-layer', 'visibility', this.checked ? 'visible' : 'none');
       });
     }
+
+    // Overlay-Kacheln: UI-Toggle + Layer ein-/ausblenden
+    const einwohnerTile = document.querySelector('.overlay-tile[data-overlay="einwohner"]');
+    if (einwohnerTile && typeof CONFIG !== 'undefined' && CONFIG.POPULATION_LAYER_VISIBLE) {
+      einwohnerTile.classList.add('active');
+    }
+    document.querySelectorAll('.overlay-tile').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (this.disabled) return;
+        this.classList.toggle('active');
+        const overlay = this.getAttribute('data-overlay');
+        const isActive = this.classList.contains('active');
+        if (typeof window._setOverlayVisibility === 'function') {
+          window._setOverlayVisibility(overlay, isActive);
+        }
+      });
+    });
 
   }
 
