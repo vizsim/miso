@@ -162,7 +162,7 @@ const App = {
         } else {
           const id = State.getNextIsochroneId();
           State.incrementNextIsochroneId();
-          saved.push({ id, visible: true, color: '#3388ff', ...result });
+          saved.push({ id, visible: true, color: CONFIG.DEFAULT_ISOCHRONE_COLOR, ...result });
           State.setSavedIsochrones(saved);
           // Neuer Startpunkt: inkrementell rendern statt alles neu zu zeichnen.
           this._appendSavedIsochroneRender(saved[saved.length - 1], saved.length - 1);
@@ -203,7 +203,7 @@ const App = {
         const id = State.getNextIsochroneId();
         State.incrementNextIsochroneId();
         const saved = State.getSavedIsochrones();
-        saved.push({ id, visible: true, color: '#3388ff', ...data });
+        saved.push({ id, visible: true, color: CONFIG.DEFAULT_ISOCHRONE_COLOR, ...data });
         State.setSavedIsochrones(saved);
         this._appendSavedIsochroneRender(saved[saved.length - 1], saved.length - 1);
         SavedIsochronesList.update();
@@ -490,7 +490,7 @@ const App = {
         if (last && last.polygons && last.polygons.length > 0) {
           const id = State.getNextIsochroneId();
           State.incrementNextIsochroneId();
-          State.setSavedIsochrones([{ id, color: '#3388ff', ...last }]);
+          State.setSavedIsochrones([{ id, color: CONFIG.DEFAULT_ISOCHRONE_COLOR, ...last }]);
           this._redrawAllSavedIsochrones();
           SavedIsochronesList.update();
           const exportBtn = Utils.getElement('#export-btn');
@@ -575,7 +575,7 @@ const App = {
       State.setSavedIsochroneMarkers(currentMarkers);
     }
 
-    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
@@ -699,7 +699,7 @@ const App = {
     }
     State.setSavedIsochroneMarkers(markerRefs);
 
-    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
@@ -750,7 +750,7 @@ const App = {
       else if (selected > index) State.setSelectedIsochroneStartKey(selected - 1);
     }
     this.applyIsochroneSelectionHighlight();
-    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
@@ -802,7 +802,7 @@ const App = {
 
     State.setSavedIsochroneMarkers(markerRefs);
     this.applyIsochroneSelectionHighlight();
-    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
@@ -851,7 +851,7 @@ const App = {
     });
     State.setIsochronePolygonLayers(allLayers);
     State.setSavedIsochroneMarkers(markers);
-    this._recomputeSavedOverlapIfNeeded().catch(() => {});
+    this._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     this._updateNoTargetHint();
     this._renderOptimizationAdvancedControls();
   },
@@ -1197,13 +1197,13 @@ const App = {
     const center = newCenter && !isNaN(newCenter[0]) && !isNaN(newCenter[1])
       ? newCenter
       : (item.center.slice ? item.center.slice() : [item.center[0], item.center[1]]);
-    const color = (config.color != null && /^#[0-9a-fA-F]{6}$/.test(config.color)) ? config.color : (item.color || '#3388ff');
+    const color = (config.color != null && /^#[0-9a-fA-F]{6}$/.test(config.color)) ? config.color : (item.color || CONFIG.DEFAULT_ISOCHRONE_COLOR);
 
     const sameCenter = !!item.center && Math.abs(item.center[0] - center[0]) < 1e-10 && Math.abs(item.center[1] - center[1]) < 1e-10;
     const sameTime = Number(item.time_limit) === Number(config.time_limit);
     const sameBuckets = Number(item.buckets) === Number(config.buckets);
     const sameProfile = String(item.profile || '') === String(config.profile || '');
-    const onlyColorChanged = sameCenter && sameTime && sameBuckets && sameProfile && color !== (item.color || '#3388ff');
+    const onlyColorChanged = sameCenter && sameTime && sameBuckets && sameProfile && color !== (item.color || CONFIG.DEFAULT_ISOCHRONE_COLOR);
 
     if (onlyColorChanged) {
       const savedNow = State.getSavedIsochrones();

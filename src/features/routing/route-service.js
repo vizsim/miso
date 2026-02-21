@@ -1,5 +1,11 @@
 // ==== Route-Service: Route-Berechnung & -Verwaltung ====
 const RouteService = {
+  _cachedPopWeightEl: null,
+  _getPopWeightEl() {
+    if (!this._cachedPopWeightEl) this._cachedPopWeightEl = document.getElementById('config-population-weight-starts');
+    return this._cachedPopWeightEl;
+  },
+
   /**
    * Berechnet Routen zu einem Zielpunkt
    * @param {Array} target - [lat, lng]
@@ -21,7 +27,10 @@ const RouteService = {
       Utils.logError('RouteService', 'LayerGroup nicht initialisiert');
       return null;
     }
-    
+
+    const activeDistBtn = document.querySelector('.dist-btn.active');
+    const popWeightEl = this._getPopWeightEl();
+
     // Startpunkte erzeugen oder wiederverwenden
     let starts, colors;
     if (reuseStarts && State.getLastStarts() && State.getLastColors()) {
@@ -29,10 +38,8 @@ const RouteService = {
       colors = State.getLastColors();
     } else {
       // Einwohner-Gewichtung: eigene Checkbox (unabhängig von Längenverteilung)
-      const usePopulationWeight = !!(document.getElementById('config-population-weight-starts') && document.getElementById('config-population-weight-starts').checked);
-      const distType = distributionType ||
-        (document.querySelector('.dist-btn.active')?.dataset.dist) ||
-        'lognormal';
+      const usePopulationWeight = !!(popWeightEl && popWeightEl.checked);
+      const distType = distributionType || activeDistBtn?.dataset.dist || 'lognormal';
 
       if (usePopulationWeight && CONFIG.POPULATION_PMTILES_URL) {
         try {
@@ -105,7 +112,6 @@ const RouteService = {
       State.setAllRouteResponses(allRouteResponses);
 
       // Verteilungstyp ermitteln (für spätere Wiederherstellung)
-      const activeDistBtn = document.querySelector('.dist-btn.active');
       const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
 
       const routeInfo = {

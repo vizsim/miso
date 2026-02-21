@@ -220,7 +220,7 @@ class MLGeoLayer extends MLBaseLayer {
           source: this._sourceId,
           type: 'line',
           paint: {
-            'line-color': this._style.color || '#3388ff',
+            'line-color': this._style.color || CONFIG.DEFAULT_ISOCHRONE_COLOR,
             'line-opacity': this._style.opacity ?? 0.8,
             'line-width': this._style.weight ?? 2
           }
@@ -233,7 +233,7 @@ class MLGeoLayer extends MLBaseLayer {
           source: this._sourceId,
           type: 'fill',
           paint: {
-            'fill-color': this._style.fillColor || this._style.color || '#3388ff',
+            'fill-color': this._style.fillColor || this._style.color || CONFIG.DEFAULT_ISOCHRONE_COLOR,
             'fill-opacity': this._style.fillOpacity ?? 0.3
           }
         });
@@ -244,7 +244,7 @@ class MLGeoLayer extends MLBaseLayer {
           source: this._sourceId,
           type: 'line',
           paint: {
-            'line-color': this._style.color || '#3388ff',
+            'line-color': this._style.color || CONFIG.DEFAULT_ISOCHRONE_COLOR,
             'line-opacity': this._style.opacity ?? 0.8,
             'line-width': this._style.weight ?? 2
           }
@@ -338,12 +338,12 @@ class MLGeoLayer extends MLBaseLayer {
     this.options = { ...this.options, ...stylePatch };
     if (!this._map) return;
     if (this._map.getLayer(this._lineLayerId)) {
-      this._map.setPaintProperty(this._lineLayerId, 'line-color', this._style.color || '#3388ff');
+      this._map.setPaintProperty(this._lineLayerId, 'line-color', this._style.color || CONFIG.DEFAULT_ISOCHRONE_COLOR);
       this._map.setPaintProperty(this._lineLayerId, 'line-opacity', this._style.opacity ?? 0.8);
       this._map.setPaintProperty(this._lineLayerId, 'line-width', this._style.weight ?? 2);
     }
     if (!this._isLineOnly && this._map.getLayer(this._fillLayerId)) {
-      this._map.setPaintProperty(this._fillLayerId, 'fill-color', this._style.fillColor || this._style.color || '#3388ff');
+      this._map.setPaintProperty(this._fillLayerId, 'fill-color', this._style.fillColor || this._style.color || CONFIG.DEFAULT_ISOCHRONE_COLOR);
       this._map.setPaintProperty(this._fillLayerId, 'fill-opacity', this._style.fillOpacity ?? 0.3);
     }
   }
@@ -451,7 +451,7 @@ const MapRenderer = {
   },
 
   _renderPopulationLegend() {
-    const el = document.getElementById('population-legend');
+    const { el } = this._getPopulationLegendEls();
     if (!el) return;
     const ticks = [0, 10, 50, 100, 500, 2000];
     const fillForPop = (pop) => {
@@ -472,9 +472,16 @@ const MapRenderer = {
     el.innerHTML = html;
   },
 
+  _cachedPopulationLegendWrapper: null,
+  _cachedPopulationLegendEl: null,
+  _getPopulationLegendEls() {
+    if (!this._cachedPopulationLegendWrapper) this._cachedPopulationLegendWrapper = document.getElementById('population-legend-wrapper');
+    if (!this._cachedPopulationLegendEl) this._cachedPopulationLegendEl = document.getElementById('population-legend');
+    return { wrapper: this._cachedPopulationLegendWrapper, el: this._cachedPopulationLegendEl };
+  },
+
   _setPopulationLegendVisible(visible) {
-    const wrapper = document.getElementById('population-legend-wrapper');
-    const el = document.getElementById('population-legend');
+    const { wrapper, el } = this._getPopulationLegendEls();
     if (wrapper) wrapper.style.display = visible ? 'block' : 'none';
     if (el) el.setAttribute('aria-hidden', visible ? 'false' : 'true');
   },

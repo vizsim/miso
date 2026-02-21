@@ -33,7 +33,7 @@ const SavedIsochroneController = {
       State.setSavedIsochroneMarkers(currentMarkers);
     }
 
-    app._recomputeSavedOverlapIfNeeded().catch(() => {});
+    app._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     app._updateNoTargetHint();
     app._renderOptimizationAdvancedControls();
   },
@@ -144,7 +144,7 @@ const SavedIsochroneController = {
     }
     State.setSavedIsochroneMarkers(markerRefs);
 
-    app._recomputeSavedOverlapIfNeeded().catch(() => {});
+    app._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     app._updateNoTargetHint();
     app._renderOptimizationAdvancedControls();
   },
@@ -192,7 +192,7 @@ const SavedIsochroneController = {
       else if (selected > index) State.setSelectedIsochroneStartKey(selected - 1);
     }
     app.applyIsochroneSelectionHighlight();
-    app._recomputeSavedOverlapIfNeeded().catch(() => {});
+    app._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     app._updateNoTargetHint();
     app._renderOptimizationAdvancedControls();
   },
@@ -241,7 +241,7 @@ const SavedIsochroneController = {
 
     State.setSavedIsochroneMarkers(markerRefs);
     app.applyIsochroneSelectionHighlight();
-    app._recomputeSavedOverlapIfNeeded().catch(() => {});
+    app._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     app._updateNoTargetHint();
     app._renderOptimizationAdvancedControls();
   },
@@ -287,7 +287,7 @@ const SavedIsochroneController = {
     });
     State.setIsochronePolygonLayers(allLayers);
     State.setSavedIsochroneMarkers(markers);
-    app._recomputeSavedOverlapIfNeeded().catch(() => {});
+    app._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     app._updateNoTargetHint();
     app._renderOptimizationAdvancedControls();
   },
@@ -320,13 +320,13 @@ const SavedIsochroneController = {
     const center = newCenter && !isNaN(newCenter[0]) && !isNaN(newCenter[1])
       ? newCenter
       : (item.center.slice ? item.center.slice() : [item.center[0], item.center[1]]);
-    const color = (config.color != null && /^#[0-9a-fA-F]{6}$/.test(config.color)) ? config.color : (item.color || '#3388ff');
+    const color = (config.color != null && /^#[0-9a-fA-F]{6}$/.test(config.color)) ? config.color : (item.color || CONFIG.DEFAULT_ISOCHRONE_COLOR);
 
     const sameCenter = !!item.center && Math.abs(item.center[0] - center[0]) < 1e-10 && Math.abs(item.center[1] - center[1]) < 1e-10;
     const sameTime = Number(item.time_limit) === Number(config.time_limit);
     const sameBuckets = Number(item.buckets) === Number(config.buckets);
     const sameProfile = String(item.profile || '') === String(config.profile || '');
-    const onlyColorChanged = sameCenter && sameTime && sameBuckets && sameProfile && color !== (item.color || '#3388ff');
+    const onlyColorChanged = sameCenter && sameTime && sameBuckets && sameProfile && color !== (item.color || CONFIG.DEFAULT_ISOCHRONE_COLOR);
 
     if (onlyColorChanged) {
       const savedNow = State.getSavedIsochrones();

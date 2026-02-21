@@ -93,7 +93,7 @@ const Visualization = {
     const layerGroup = State.getLayerGroup();
     if (!layerGroup) return null;
     const ll = Array.isArray(latlng) ? { lat: latlng[0], lng: latlng[1] } : latlng;
-    const color = (options.color && /^#[0-9a-fA-F]{6}$/.test(options.color)) ? options.color : '#3388ff';
+    const color = (options.color && /^#[0-9a-fA-F]{6}$/.test(options.color)) ? options.color : CONFIG.DEFAULT_ISOCHRONE_COLOR;
 
     const blueCircleIcon = MapRenderer.createDivIcon({
       className: 'isochrone-start-point-icon',

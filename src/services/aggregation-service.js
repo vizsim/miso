@@ -74,19 +74,7 @@ const AggregationService = {
     const GRID_CELL_SIZE = 0.0001; // ~10m für Grid-Index (kleinere Zellen = mehr Checks, aber präziser)
     const EPSILON_DIST = 0.0001; // ~10m Toleranz für Overlap-Erkennung (toleranter)
     const MAX_ANGLE_RAD = Math.PI / 8; // ~22.5 Grad Winkel-Toleranz (toleranter für Kurven)
-    
-    // Langsamere, aber bessere Variante (maximale Präzision)
-    // const GRID_SIZE = 0.00005; // ~5m in Grad für Grid-Normalisierung (sehr präzise)
-    // const GRID_CELL_SIZE = 0.00008; // ~8m für Grid-Index (sehr kleine Zellen = viele Checks)
-    // const EPSILON_DIST = 0.00012; // ~12m Toleranz für Overlap-Erkennung (sehr tolerant)
-    // const MAX_ANGLE_RAD = Math.PI / 6; // ~30 Grad Winkel-Toleranz (sehr tolerant)
-    
-    // Schnellere, aber schlechtere Variante (weniger präzise)
-    // const GRID_SIZE = 0.00015; // ~15m in Grad für Grid-Normalisierung (weniger präzise)
-    // const GRID_CELL_SIZE = 0.0002; // ~20m für Grid-Index (größere Zellen = weniger Checks)
-    // const EPSILON_DIST = 0.00008; // ~8m Toleranz für Overlap-Erkennung (weniger tolerant)
-    // const MAX_ANGLE_RAD = Math.PI / 12; // ~15 Grad Winkel-Toleranz (weniger tolerant)
-    
+
     // Schritt 1: Sammle alle Segmente
     const allSegments = [];
     routeDataArray.forEach(routeCoords => {

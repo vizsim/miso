@@ -143,7 +143,7 @@ const OverlapController = {
     if (app._overlapRecomputeTimer) clearTimeout(app._overlapRecomputeTimer);
     app._overlapRecomputeTimer = setTimeout(() => {
       app._overlapRecomputeTimer = null;
-      app._recomputeSavedOverlapIfNeeded().catch(() => {});
+      app._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
     }, Math.max(0, delayMs));
   },
 
@@ -223,7 +223,7 @@ const OverlapController = {
       const timeLbl = (typeof IsochroneRenderer !== 'undefined' && IsochroneRenderer.getTimeBucketLabel)
         ? IsochroneRenderer.getTimeBucketLabel(clamped, it.time_limit ?? CONFIG.ISOCHRONE_TIME_LIMIT, it.buckets ?? CONFIG.ISOCHRONE_BUCKETS)
         : `${clamped}`;
-      const color = it.color || '#3388ff';
+      const color = it.color || CONFIG.DEFAULT_ISOCHRONE_COLOR;
       return `
         <div class="config-group" style="margin-top: 8px; padding: 8px; border: 1px solid #eee; border-radius: 6px;">
           <div style="display:flex; align-items:center; gap:8px;">
@@ -394,7 +394,7 @@ const OverlapController = {
     State.setOptimizationSettings(s);
     if (statusEl) statusEl.textContent = `Overlap gefunden nach ${iter} Schritt(en).`;
     app._renderOptimizationAdvancedControls();
-    app._recomputeSavedOverlapIfNeeded().catch(() => {});
+    app._recomputeSavedOverlapIfNeeded().catch(e => console.warn('Overlap recompute failed', e));
   },
 
   setupOptimizationOverlap(app) {

@@ -176,7 +176,7 @@ const SavedIsochronesList = {
       timeInput.step = bucketSizeMin;
       timeInput.value = timeClamped;
     }
-    const c = (item.color && /^#[0-9a-fA-F]{6}$/.test(item.color)) ? item.color : '#3388ff';
+    const c = (item.color && /^#[0-9a-fA-F]{6}$/.test(item.color)) ? item.color : CONFIG.DEFAULT_ISOCHRONE_COLOR;
     if (colorInput) colorInput.value = c;
     if (colorHexInput) colorHexInput.value = c;
     this._editSelectedCoordinates = null;
@@ -230,7 +230,7 @@ const SavedIsochronesList = {
     const rawColor = (colorHexInput && colorHexInput.value) ? colorHexInput.value : (colorInput ? colorInput.value : '');
     const color = /^#?[0-9a-fA-F]{6}$/.test(rawColor)
       ? (rawColor.startsWith('#') ? rawColor : ('#' + rawColor)).toLowerCase()
-      : '#3388ff';
+      : CONFIG.DEFAULT_ISOCHRONE_COLOR;
     let profile = 'foot';
     if (profileBtns.length) {
       const active = Array.from(profileBtns).find(function(b) { return b.classList.contains('active'); });
@@ -314,7 +314,7 @@ const SavedIsochronesList = {
       const buckets = item.buckets != null ? item.buckets : 5;
       const profile = item.profile || '–';
       const visible = item.visible !== false;
-      const color = (item.color && /^#[0-9a-fA-F]{6}$/.test(item.color)) ? item.color : '#3388ff';
+      const color = (item.color && /^#[0-9a-fA-F]{6}$/.test(item.color)) ? item.color : CONFIG.DEFAULT_ISOCHRONE_COLOR;
 
       const labelWrap = document.createElement('span');
       labelWrap.style.flex = '1';

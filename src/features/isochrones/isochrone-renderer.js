@@ -1,7 +1,6 @@
 // ==== Isochrone-Renderer: Zeichnet Isochrone-Polygone auf der Karte ====
 // Einfarbig (optional pro Startpunkt): innen kräftig, nach außen abnehmende Intensität
 
-const DEFAULT_ISOCHRONE_COLOR = '#3388ff';
 const ISOCHRONE_WHITE = { r: 245, g: 250, b: 255 };
 
 function hexToRgb(hex) {
@@ -13,8 +12,8 @@ function hexToRgb(hex) {
  * Gibt für einen Bucket Fill-Farbe und Opacity zurück. baseRgb = Hauptfarbe (innen), sonst Default-Blau.
  */
 function getBucketStyle(bucket, buckets, baseRgb) {
-  const rgb = baseRgb || hexToRgb(DEFAULT_ISOCHRONE_COLOR);
-  if (!rgb) return { fillColor: DEFAULT_ISOCHRONE_COLOR, lineColor: '#4f80ff', fillOpacity: 0.5, strokeOpacity: 0.9, weight: 3 };
+  const rgb = baseRgb || hexToRgb(CONFIG.DEFAULT_ISOCHRONE_COLOR);
+  if (!rgb) return { fillColor: CONFIG.DEFAULT_ISOCHRONE_COLOR, lineColor: '#4f80ff', fillOpacity: 0.5, strokeOpacity: 0.9, weight: 3 };
   const n = Math.max(1, buckets);
   const t = n === 1 ? 1 : 1 - bucket / (n - 1); // 1 innen, 0 außen
   const tClamped = Math.max(0, Math.min(1, t));

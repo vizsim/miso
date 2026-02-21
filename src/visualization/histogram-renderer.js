@@ -41,12 +41,15 @@ const HistogramRenderer = {
     const canvas = document.getElementById('distance-histogram');
     if (!canvas) return;
 
+    const modeBtn = document.querySelector('.histogram-mode-btn.active');
+    const activeDistBtn = document.querySelector('.dist-btn.active');
+    const popWeightEl = document.getElementById('config-population-weight-starts');
+
     if (!starts || starts.length === 0) {
       this._drawPlaceholder(canvas);
       return;
     }
 
-    const modeBtn = document.querySelector('.histogram-mode-btn.active');
     const isRouteMode = modeBtn && modeBtn.dataset.mode === 'route';
     const routeData = options.routeData || [];
     const routeDistances = options.routeDistances || [];
@@ -123,10 +126,9 @@ const HistogramRenderer = {
 
     let expectedBins = null;
     if (showExpectedCurve) {
-      const activeDistBtn = document.querySelector('.dist-btn.active');
       const distType = activeDistBtn ? activeDistBtn.dataset.dist : 'lognormal';
       const totalPoints = distances.length;
-      const usePopulationWeight = !!(document.getElementById('config-population-weight-starts') && document.getElementById('config-population-weight-starts').checked);
+      const usePopulationWeight = !!(popWeightEl && popWeightEl.checked);
       if (usePopulationWeight) {
         expectedBins = Distribution.calculateDistribution(distType, numBins, maxDistM, totalPoints);
       } else {

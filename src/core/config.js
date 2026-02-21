@@ -1,5 +1,6 @@
 // ==== Konfiguration ====
 const CONFIG = {
+  DEFAULT_ISOCHRONE_COLOR: '#3388ff', // Standardfarbe Isochrone/Catchment (in JS referenzieren; CSS/HTML ggf. manuell abgleichen)
   // Overpass API: Reihenfolge = Fallback bei Fehlern (erster nicht erreichbar → nächster)
   OVERPASS_SERVERS: [
     "https://overpass-api.de/api/",
@@ -7,16 +8,9 @@ const CONFIG = {
     "https://maps.mail.ru/osm/tools/overpass/api/",
     "https://overpass.openstreetmap.ru/api/"
   ],
-  //GH_ROUTE_URL: "https://ghroute.duckdns.org/route", // GraphHopper Route API
   GH_ROUTE_URL: "https://ghroute.vizsim.de/route", // GraphHopper Route API
-  //GH_ROUTE_URL: "http://localhost:8989/route", // GraphHopper Route API
-  // Isochrone API (gleicher Server, anderer Pfad)
-  GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone", 
-  //GH_ISOCHRONE_URL: "http://localhost:8990/isochrone",
-  // Transitous/Motis one-to-all (ÖPNV-Isochrone, approximiert im Browser)
-  // Standard: direkter Zugriff auf Transitous (CORS-fähig).
+  GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone",
   TRANSITOUS_ONE_TO_ALL_URL: "https://api.transitous.org/api/v1/one-to-all",
-  //TRANSITOUS_ONE_TO_ALL_URL: "/transitous/api/v1/one-to-all",
   TRANSITOUS_WALK_SPEED_MPS: 1.4, // Restzeit -> Fußweg-Puffer (m/s)
   TRANSITOUS_MAX_TRANSFERS: 14,
   // Einheit der "duration" aus one-to-all:

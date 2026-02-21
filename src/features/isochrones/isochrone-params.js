@@ -26,8 +26,10 @@ const IsochroneParams = {
   },
 
   getFromUI() {
-    const bucketSizeMin = parseInt(document.getElementById('config-isochrone-bucket-size')?.value || '5', 10) || 5;
-    let timeMin = parseInt(document.getElementById('config-isochrone-time')?.value || '10', 10) || 10;
+    const bucketEl = document.getElementById('config-isochrone-bucket-size');
+    const timeEl = document.getElementById('config-isochrone-time');
+    const bucketSizeMin = parseInt(bucketEl?.value || '5', 10) || 5;
+    let timeMin = parseInt(timeEl?.value || '10', 10) || 10;
     timeMin = Math.round(timeMin / bucketSizeMin) * bucketSizeMin;
     timeMin = Math.max(bucketSizeMin, Math.min(120, timeMin));
     CONFIG.ISOCHRONE_BUCKET_SIZE_MIN = bucketSizeMin;
