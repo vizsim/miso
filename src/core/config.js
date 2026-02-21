@@ -12,6 +12,7 @@ const CONFIG = {
   GH_ISOCHRONE_URL: "https://ghroute.vizsim.de/isochrone",
   TRANSITOUS_ONE_TO_ALL_URL: "https://api.transitous.org/api/v1/one-to-all",
   TRANSITOUS_WALK_SPEED_MPS: 1.4, // Restzeit -> Fußweg-Puffer (m/s)
+  TRANSITOUS_MAX_PRE_POST_WALK_SEC: 900, // Vor-/Nachweg max. 15 Min. (Sekunden); muss mit API-Param maxPreTransitTime/maxPostTransitTime übereinstimmen
   TRANSITOUS_MAX_TRANSFERS: 14,
   // Einheit der "duration" aus one-to-all:
   // 'auto' (heuristisch), 'minutes' oder 'seconds'

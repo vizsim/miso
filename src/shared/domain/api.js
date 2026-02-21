@@ -250,9 +250,17 @@ const API = {
     for (let bucket = 0; bucket < bucketCount; bucket++) {
       const thresholdSec = Math.round((bucket + 1) * stepSec);
       const polys = [];
+      const maxWalkSec = Number(CONFIG.TRANSITOUS_MAX_PRE_POST_WALK_SEC ?? 900);
       reachable.forEach((p) => {
         if (p.tSec > thresholdSec) return;
-        const remaining = Math.max(0, thresholdSec - p.tSec);
+        let remaining = Math.max(0, thresholdSec - p.tSec);
+        // Punkte nahe dem Start (nur Fußweg): Restzeit-Puffer auf verbleibendes Vorweg-Budget begrenzen (max 15 Min. ab Start)
+        if (p.tSec <= maxWalkSec) {
+          remaining = Math.min(remaining, maxWalkSec - p.tSec);
+        } else {
+          // Punkte nach ÖPNV: Nachweg max. 15 Min.
+          remaining = Math.min(remaining, maxWalkSec);
+        }
         const radiusM = remaining * walkSpeedMps;
         if (radiusM < minRadiusM) return;
         try {
@@ -342,8 +350,8 @@ const API = {
       requireCarTransport: 'false',
       preTransitModes: 'WALK',
       postTransitModes: 'WALK',
-      maxPreTransitTime: '900',
-      maxPostTransitTime: '900',
+      maxPreTransitTime: String(CONFIG.TRANSITOUS_MAX_PRE_POST_WALK_SEC ?? 900),
+      maxPostTransitTime: String(CONFIG.TRANSITOUS_MAX_PRE_POST_WALK_SEC ?? 900),
       elevationCosts: 'NONE',
       maxMatchingDistance: '250',
       ignorePreTransitRentalReturnConstraints: 'false',
